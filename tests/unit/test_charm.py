@@ -48,6 +48,12 @@ class TestCharm(unittest.TestCase):
         self.harness.update_config({"log-level": "debug"})
         # Get the plan now we've run PebbleReady
         updated_plan = self.harness.get_container_pebble_plan("httpbin").to_dict()
+        if "services" not in updated_plan:
+            self.fail("No services found in plan")
+        if "httpbin" not in updated_plan["services"]:
+            self.fail("httpbin service not found in plan")
+        if "environment" not in updated_plan["services"]["httpbin"]:
+            self.fail("environment not found in httpbin service")
         updated_env = updated_plan["services"]["httpbin"]["environment"]
         # Check the config change was effective
         self.assertEqual(updated_env, {"GUNICORN_CMD_ARGS": "--log-level debug"})

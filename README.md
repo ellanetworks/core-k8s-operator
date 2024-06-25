@@ -1,1 +1,1 @@
-# ella-k8s-operator
+# Ella K8s Operator
