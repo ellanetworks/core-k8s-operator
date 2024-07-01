@@ -127,7 +127,6 @@ pytz==2024.1
     # via pyrfc3339
 pyyaml==6.0.1
     # via
-    #   -c requirements.txt
     #   juju
     #   kubernetes
     #   pytest-operator
@@ -141,7 +140,7 @@ requests-oauthlib==2.0.0
     # via kubernetes
 rsa==4.9
     # via google-auth
-ruff==0.4.10
+ruff==0.5.0
     # via -r test-requirements.in
 six==1.16.0
     # via
@@ -169,8 +168,6 @@ urllib3==2.2.2
 wcwidth==0.2.13
     # via prompt-toolkit
 websocket-client==1.8.0
-    # via
-    #   -c requirements.txt
-    #   kubernetes
+    # via kubernetes
 websockets==12.0
     # via juju
