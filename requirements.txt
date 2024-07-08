@@ -4,7 +4,7 @@
 #
 #    pip-compile requirements.in
 #
-ops==2.14.0
+ops==2.14.1
     # via -r requirements.in
 pyyaml==6.0.1
     # via ops
