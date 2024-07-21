@@ -24,7 +24,7 @@ async def test_build_and_deploy(ops_test: OpsTest, request):
     """
     assert ops_test.model
     charm_path = Path(request.config.getoption("--charm_path")).resolve()
-    resources = {"httpbin-image": METADATA["resources"]["httpbin-image"]["upstream-source"]}
+    resources = {"ella-image": METADATA["resources"]["ella-image"]["upstream-source"]}
 
     await asyncio.gather(
         ops_test.model.deploy(charm_path, resources=resources, application_name=APP_NAME),
