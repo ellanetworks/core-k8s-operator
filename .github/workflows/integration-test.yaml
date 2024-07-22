@@ -2,6 +2,9 @@ name: Integration tests
 
 on:
   workflow_call:
+    secrets:
+      GHCR_TOKEN:
+        required: true
 
 jobs:
   integration-test:
@@ -15,11 +18,11 @@ jobs:
         with:
           name: built-charm
           path: built/
-      
+
       - name: Get Charm Under Test Path
         id: charm-path
         run: echo "charm_path=$(find built/ -name '*.charm' -type f -print)" >> $GITHUB_OUTPUT
-      
+
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
@@ -27,9 +30,12 @@ jobs:
           channel: 1.29-strict/stable
           juju-channel: 3.4/stable
           lxd-channel: 5.20/stable
-  
+
       - name: Enable Metallb
         run: /usr/bin/sg snap_microk8s -c "sudo microk8s enable metallb:10.0.0.2-10.0.0.10"
+      
+      - name: Pull Workload Image
+        run: /usr/bin/sg snap_microk8s -c "sudo microk8s ctr images pull ghcr.io/yeastengine/ella:0.0.1 --user gruyaume:${{ secrets.GHCR_TOKEN }}"
 
       - name: Run integration tests
         run: |

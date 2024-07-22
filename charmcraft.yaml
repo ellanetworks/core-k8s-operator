@@ -1,14 +1,10 @@
 
 name: ella-k8s
 type: charm
-title: Charm Template
-summary: A very short one-line summary of the charm.
+title: Ella (K8s)
+summary: A private mobile network.
 
-description: |
-  A single sentence that says what the charm is, concisely and memorably.
-  A paragraph of one to three short sentences, that describe what the charm does.
-  A third paragraph that explains what need the charm meets.
-  Finally, a paragraph that describes whom the charm is useful for.
+description: A private mobile network.
 
 bases:
   - build-on:
@@ -18,23 +14,20 @@ bases:
     - name: ubuntu
       channel: "22.04"
 
-
-config:
-  options:
-    log-level:
-      description: |
-        Configures the log level of gunicorn.
-
-        Acceptable values are: "info", "debug", "warning", "error" and "critical"
-      default: "info"
-      type: string
-
 containers:
-  httpbin:
-    resource: httpbin-image
+  ella:
+    resource: ella-image
+    mounts:
+      - storage: config
+        location: /etc/ella
 
 resources:
-  httpbin-image:
+  ella-image:
     type: oci-image
-    description: OCI image for httpbin
-    upstream-source: kennethreitz/httpbin
+    description: OCI image for ella
+    upstream-source: ghcr.io/yeastengine/ella:0.0.1
+
+storage:
+  config:
+    type: filesystem
+    minimum-size: 1M

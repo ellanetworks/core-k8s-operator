@@ -1,72 +1,88 @@
-# Copyright 2024 Guillaume
+# Copyright 2024 Guillaume Belanger
 # See LICENSE file for licensing details.
 
-
-from unittest.mock import patch
+import tempfile
+from pathlib import Path
 
 import pytest
-from charm import EllaK8SOperatorCharm
-from ops import BlockedStatus, WaitingStatus, testing
+import yaml
+from charm import EllaK8SCharm
+from ops import ActiveStatus, WaitingStatus
+from scenario import Container, Context, Mount, State
+
+METADATA = yaml.safe_load(Path("charmcraft.yaml").read_text())
 
 NAMESPACE = "whatever"
 
+
 class TestCharm:
-
-    @pytest.fixture()
-    def setup(self):
-        pass
-
-    @staticmethod
-    def teardown() -> None:
-        patch.stopall()
-
     @pytest.fixture(autouse=True)
-    def harnesser(self, setup, request):
-        self.harness = testing.Harness(EllaK8SOperatorCharm)
-        self.harness.set_model_name(name=NAMESPACE)
-        self.harness.begin()
-        yield self.harness
-        self.harness.cleanup()
-        request.addfinalizer(self.teardown)
+    def context(self):
+        self.ctx = Context(charm_type=EllaK8SCharm, juju_version="3.1")
 
-    def test_given_invalid_config_when_evaluate_status_then_blocked(self):
-        self.harness.update_config({"log-level": "foobar"})
+    def test_given_cant_connect_when_collect_unit_status_then_waitingstatus(
+        self,
+    ):
+        container = Container(
+            name="ella",
+            can_connect=False,
+        )
 
-        self.harness.evaluate_status()
+        state_in = State(
+            containers=[container],
+        )
 
-        assert self.harness.model.unit.status == BlockedStatus("Invalid log level")
+        state_out = self.ctx.run("collect_unit_status", state_in)
 
-    def test_given_cant_connect_when_evaluate_status_then_waiting(self):
-        self.harness.update_config({"log-level": "info"})
+        assert state_out.unit_status == WaitingStatus("waiting for Pebble API")
 
-        self.harness.evaluate_status()
+    def test_given_config_file_does_not_exist_when_collect_unit_status_then_waitingstatus(
+        self,
+    ):
+        container = Container(
+            name="ella",
+            can_connect=True,
+        )
 
-        assert self.harness.model.unit.status == WaitingStatus("waiting for Pebble API")
+        state_in = State(
+            containers=[container],
+        )
 
-    def test_given_valid_config_when_configure_then_service_is_running(self):
-        expected_plan = {
-            "services": {
-                "httpbin": {
-                    "override": "replace",
-                    "summary": "httpbin",
-                    "command": "gunicorn -b 0.0.0.0:80 httpbin:app -k gevent",
-                    "startup": "enabled",
-                    "environment": {"GUNICORN_CMD_ARGS": "--log-level info"},
-                }
-            },
-        }
+        state_out = self.ctx.run("collect_unit_status", state_in)
 
-        self.harness.container_pebble_ready("httpbin")
+        assert state_out.unit_status == WaitingStatus("waiting for config file")
 
-        updated_plan = self.harness.get_container_pebble_plan("httpbin").to_dict()
-        service = self.harness.model.unit.get_container("httpbin").get_service("httpbin")
-        assert expected_plan == updated_plan
-        assert service.is_running()
+    def test_given_config_file_exists_when_collect_unit_status_then_activestatus(
+        self,
+    ):
+        with tempfile.NamedTemporaryFile() as local_file:
+            container = Container(
+                name="ella",
+                can_connect=True,
+                mounts={"config": Mount("/etc/ella/ella.yaml", local_file.name)},
+            )
 
-    def test_given_invalid_config_when_configure_then_service_not_running(self):
-        self.harness.set_can_connect("httpbin", True)
+            state_in = State(
+                containers=[container],
+            )
 
-        self.harness.update_config({"log-level": "foobar"})
+            state_out = self.ctx.run("collect_unit_status", state_in)
 
-        updated_plan = self.harness.get_container_pebble_plan("httpbin").to_dict()
-        assert updated_plan == {}
+            assert state_out.unit_status == ActiveStatus("")
+
+    def test_given_config_file_not_written_when_update_status_then_config_file_is_written(
+        self,
+    ):
+        with tempfile.NamedTemporaryFile() as local_file:
+            container = Container(
+                name="ella",
+                can_connect=True,
+                mounts={"config": Mount("/etc/ella/ella.yaml", local_file.name)},
+            )
+            state_in = State(containers=[container])
+
+            self.ctx.run(
+                container.pebble_ready_event(),
+                state_in,
+            )
+            assert local_file.read().decode() == 'mongoDBBinariesPath: "/usr/bin"'
