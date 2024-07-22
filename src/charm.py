@@ -52,7 +52,7 @@ class EllaK8SCharm(CharmBase):
             return
         event.add_status(ActiveStatus())
 
-    def _configure(self, event: EventBase):
+    def _configure(self, _: EventBase):
         if not self.container.can_connect():
             logger.warning("Pebble API is not ready")
             return

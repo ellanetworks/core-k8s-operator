@@ -85,4 +85,4 @@ class TestCharm:
                 container.pebble_ready_event(),
                 state_in,
             )
-            assert local_file.read().decode() == 'foo: "bar"'
+            assert local_file.read().decode() == 'mongoDBBinariesPath: "/usr/bin"'
