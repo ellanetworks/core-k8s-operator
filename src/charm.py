@@ -4,18 +4,34 @@
 
 """Kubernetes charm for Ella."""
 
+import json
 import logging
+from typing import List, Optional, Tuple
 
+from charm_config import CharmConfig, CharmConfigInvalidError
+from charms.kubernetes_charm_libraries.v0.multus import (
+    KubernetesMultusCharmLib,
+    NetworkAnnotation,
+    NetworkAttachmentDefinition,
+)
 from jinja2 import Environment, FileSystemLoader
-from ops import ActiveStatus, CharmBase, EventBase, Framework, WaitingStatus, main
-from ops.charm import CollectStatusEvent
-from ops.pebble import Layer
+from kubernetes_ella import EBPFVolume
+from lightkube.models.meta_v1 import ObjectMeta
+from ops import ActiveStatus, CharmBase, EventBase, EventSource, Framework, WaitingStatus, main
+from ops.charm import CharmEvents, CollectStatusEvent
+from ops.pebble import ExecError, Layer
 
 logger = logging.getLogger(__name__)
 
 CONFIG_TEMPLATE_DIR_PATH = "src/templates/"
 CONFIG_FILE_PATH = "/etc/ella/ella.yaml"
 CONFIG_TEMPLATE_NAME = "ella.yaml.j2"
+N3_INTERFACE_BRIDGE_NAME = "access-br"
+N6_INTERFACE_BRIDGE_NAME = "core-br"
+N3_NETWORK_ATTACHMENT_DEFINITION_NAME = "n3-net"
+N6_NETWORK_ATTACHMENT_DEFINITION_NAME = "n6-net"
+N3_INTERFACE_NAME = "n3"
+N6_INTERFACE_NAME = "n6"
 
 
 def render_config_file() -> str:
@@ -30,12 +46,44 @@ def render_config_file() -> str:
     return content
 
 
+class NadConfigChangedEvent(EventBase):
+    """Event triggered when an existing network attachment definition is changed."""
+
+
+class EllaCharmEvents(CharmEvents):
+    """Kubernetes Ella charm events."""
+
+    nad_config_changed = EventSource(NadConfigChangedEvent)
+
+
 class EllaK8SCharm(CharmBase):
     """Charm the service."""
 
+    on = EllaCharmEvents()  # type: ignore[reportAssignmentType]
+
     def __init__(self, framework: Framework):
         super().__init__(framework)
-        self.container = self.unit.get_container("ella")
+        self._container_name = self._service_name = "ella"
+        self.container = self.unit.get_container(self._container_name)
+        try:
+            self._charm_config: CharmConfig = CharmConfig.from_charm(charm=self)
+        except CharmConfigInvalidError:
+            return
+        self._kubernetes_multus = KubernetesMultusCharmLib(
+            charm=self,
+            container_name=self._container_name,
+            cap_net_admin=True,
+            network_annotations_func=self._generate_network_annotations,
+            network_attachment_definitions_func=self._network_attachment_definitions_from_config,
+            refresh_event=self.on.nad_config_changed,
+            privileged=True,
+        )
+        self._ebpf_volume = EBPFVolume(
+            namespace=self.model.name,
+            container_name=self._container_name,
+            app_name=self.model.app.name,
+            unit_name=self.model.unit.name,
+        )
         self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
         self.framework.observe(self.on.update_status, self._configure)
         framework.observe(self.on["ella"].pebble_ready, self._configure)
@@ -53,13 +101,79 @@ class EllaK8SCharm(CharmBase):
         event.add_status(ActiveStatus())
 
     def _configure(self, _: EventBase):
+        try:  # workaround for https://github.com/canonical/operator/issues/736
+            self._charm_config: CharmConfig = CharmConfig.from_charm(charm=self)  # type: ignore[no-redef]  # noqa: E501
+        except CharmConfigInvalidError:
+            return
+        if not self.unit.is_leader():
+            logger.info("Not a leader, skipping configuration")
+            return
         if not self.container.can_connect():
             logger.warning("Pebble API is not ready")
             return
+        if not self._kubernetes_multus.multus_is_available():
+            return
+        self.on.nad_config_changed.emit()
+        if not self._ebpf_volume.is_created():
+            self._ebpf_volume.create()
+        if not self._route_exists(
+            dst="default",
+            via=str(self._charm_config.n6_gateway_ip),
+        ):
+            self._create_default_route()
+        if not self._route_exists(
+            dst=str(self._charm_config.gnb_subnet),
+            via=str(self._charm_config.n3_gateway_ip),
+        ):
+            self._create_ran_route()
         desired_config_file = self._generate_config_file()
         if config_update_required := self._is_config_update_required(desired_config_file):
             self._push_config_file(content=desired_config_file)
         self._configure_pebble(restart=config_update_required)
+
+    def _route_exists(self, dst: str, via: str | None) -> bool:
+        """Return whether the specified route exist."""
+        try:
+            stdout, stderr = self._exec_command_in_workload(command="ip route show")
+        except ExecError as e:
+            logger.error("Failed retrieving routes: %s", e.stderr)
+            return False
+        for line in stdout.splitlines():
+            if f"{dst} via {via}" in line:
+                return True
+        return False
+
+    def _create_default_route(self) -> None:
+        """Create ip route towards core network."""
+        try:
+            self._exec_command_in_workload(
+                command=f"ip route replace default via {self._charm_config.n6_gateway_ip} metric 110"
+            )
+        except ExecError as e:
+            logger.error("Failed to create core network route: %s", e.stderr)
+            return
+        logger.info("Default core network route created")
+
+    def _create_ran_route(self) -> None:
+        """Create ip route towards gnb-subnet."""
+        try:
+            self._exec_command_in_workload(
+                command=f"ip route replace {self._charm_config.gnb_subnet} via {self._charm_config.n3_gateway_ip}"
+            )
+        except ExecError as e:
+            logger.error("Failed to create route to gnb-subnet: %s", e.stderr)
+            return
+        logger.info("Route to gnb-subnet created")
+
+    def _exec_command_in_workload(
+        self, command: str, timeout: Optional[int] = 30, environment: Optional[dict] = None
+    ) -> Tuple[str, str | None]:
+        process = self.container.exec(
+            command=command.split(),
+            timeout=timeout,
+            environment=environment,
+        )
+        return process.wait_output()
 
     def _configure_pebble(self, restart=False) -> None:
         """Configure the Pebble layer.
@@ -77,6 +191,53 @@ class EllaK8SCharm(CharmBase):
             logger.info("Restarted container ")
             return
         self.container.replan()
+
+    def _generate_network_annotations(self) -> List[NetworkAnnotation]:
+        n3_network_annotation = NetworkAnnotation(
+            name=N3_NETWORK_ATTACHMENT_DEFINITION_NAME,
+            interface=N3_INTERFACE_NAME,
+        )
+        n6_network_annotation = NetworkAnnotation(
+            name=N6_NETWORK_ATTACHMENT_DEFINITION_NAME,
+            interface=N6_INTERFACE_NAME,
+        )
+        return [n3_network_annotation, n6_network_annotation]
+
+    def _network_attachment_definitions_from_config(self) -> List[NetworkAttachmentDefinition]:
+        n3_nad_config = {
+            "cniVersion": "0.3.1",
+            "ipam": {
+                "type": "static",
+                "addresses": [
+                    {"address": f"{self._charm_config.n3_ip}/24"},
+                ],
+            },
+            "capabilities": {"mac": True},
+            "type": "bridge",
+            "bridge": N3_INTERFACE_BRIDGE_NAME,
+        }
+        n6_nad_config = {
+            "cniVersion": "0.3.1",
+            "ipam": {
+                "type": "static",
+                "addresses": [
+                    {"address": f"{self._charm_config.n6_ip}/24"},
+                ],
+            },
+            "capabilities": {"mac": True},
+            "type": "bridge",
+            "bridge": N6_INTERFACE_BRIDGE_NAME,
+        }
+
+        n3_nad = NetworkAttachmentDefinition(
+            metadata=ObjectMeta(name=(N3_NETWORK_ATTACHMENT_DEFINITION_NAME)),
+            spec={"config": json.dumps(n3_nad_config)},
+        )
+        n6_nad = NetworkAttachmentDefinition(
+            metadata=ObjectMeta(name=(N6_NETWORK_ATTACHMENT_DEFINITION_NAME)),
+            spec={"config": json.dumps(n6_nad_config)},
+        )
+        return [n3_nad, n6_nad]
 
     def _generate_config_file(self) -> str:
         return render_config_file()
