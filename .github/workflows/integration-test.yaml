@@ -1,10 +1,16 @@
-name: Integration tests
+# Copyright 2024 Guillaume Belanger
+# See LICENSE file for licensing details.
+
+name: Integration test
 
 on:
   workflow_call:
-    secrets:
-      GHCR_TOKEN:
-        required: true
+    inputs:
+      branch-name:
+        description: Name of the branch to checkout
+        required: false
+        type: string
+        default: ${{ github.ref }}
 
 jobs:
   integration-test:
@@ -12,7 +18,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+        with:
+          ref: ${{ inputs.branch-name }}
+
       - name: Fetch Charm Under Test
         uses: actions/download-artifact@v4
         with:
@@ -30,18 +38,21 @@ jobs:
           channel: 1.29-strict/stable
           juju-channel: 3.4/stable
           lxd-channel: 5.20/stable
+          microk8s-addons: "hostpath-storage dns metallb:10.0.0.2-10.0.0.10"
 
-      - name: Enable Metallb
-        run: /usr/bin/sg snap_microk8s -c "sudo microk8s enable metallb:10.0.0.2-10.0.0.10"
-      
-      - name: Pull Workload Image
-        run: /usr/bin/sg snap_microk8s -c "sudo microk8s ctr images pull ghcr.io/yeastengine/ella:0.0.1 --user gruyaume:${{ secrets.GHCR_TOKEN }}"
-
+      - name: Enable Multus addon
+        continue-on-error: true
+        run: |
+          sudo microk8s addons repo add community https://github.com/canonical/microk8s-community-addons --reference feat/strict-fix-multus
+          sudo microk8s enable multus
+          sudo microk8s kubectl -n kube-system rollout status daemonset/kube-multus-ds
+          sudo microk8s kubectl auth can-i create network-attachment-definitions
+  
       - name: Run integration tests
         run: |
           tox -e integration -- \
             --charm_path="${{ steps.charm-path.outputs.charm_path }}" \
-  
+
       - name: Archive charmcraft logs
         if: failure()
         uses: actions/upload-artifact@v4
