@@ -143,6 +143,9 @@ class EllaK8SCharm(CharmBase):
         except ExecError as e:
             logger.error("Failed retrieving routes: %s", e.stderr)
             return False
+        except FileNotFoundError as e:
+            logger.error("Failed retrieving routes: %s", e)
+            return False
         for line in stdout.splitlines():
             if f"{dst} via {via}" in line:
                 return True
@@ -157,6 +160,9 @@ class EllaK8SCharm(CharmBase):
         except ExecError as e:
             logger.error("Failed to create core network route: %s", e.stderr)
             return
+        except FileNotFoundError as e:
+            logger.error("Failed to create core network route: %s", e)
+            return
         logger.info("Default core network route created")
 
     def _create_ran_route(self) -> None:
@@ -167,6 +173,9 @@ class EllaK8SCharm(CharmBase):
             )
         except ExecError as e:
             logger.error("Failed to create route to gnb-subnet: %s", e.stderr)
+            return
+        except FileNotFoundError as e:
+            logger.error("Failed to create route to gnb-subnet: %s", e)
             return
         logger.info("Route to gnb-subnet created")
 

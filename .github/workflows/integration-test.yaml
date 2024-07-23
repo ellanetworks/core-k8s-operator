@@ -1,7 +1,4 @@
-# Copyright 2024 Guillaume Belanger
-# See LICENSE file for licensing details.
-
-name: Integration test
+name: Integration tests
 
 on:
   workflow_call:
