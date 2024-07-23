@@ -14,6 +14,12 @@ bases:
     - name: ubuntu
       channel: "22.04"
 
+parts:
+  charm:
+    build-packages:
+      - cargo
+      - rustc
+
 containers:
   ella:
     resource: ella-image
@@ -31,3 +37,34 @@ storage:
   config:
     type: filesystem
     minimum-size: 1M
+
+config:
+  options:
+    interfaces:
+      type: string
+      default: "[n3,n6]"
+      description: List of network interfaces handling N3 (GTP) & N6 (SGi) traffic. Ella attaches XDP hook to every interface in this list.
+    logging-level:
+      type: string
+      default: debug
+      description: Logging level.
+    gnb-subnet:
+      type: string
+      default: 192.168.251.0/24
+      description: gNodeB subnet.
+    n6-ip:
+      type: string
+      default: 192.168.250.3
+      description: IP address used by the Ella's Core interface.
+    n6-gateway-ip:
+      type: string
+      default: 192.168.250.1
+      description: Gateway IP address to the Core Network.
+    n3-ip:
+      type: string
+      default: 192.168.252.3
+      description: IP address used by the Ella's Access interface.
+    n3-gateway-ip:
+      type: string
+      default: 192.168.252.1
+      description: Gateway IP address to the Access Network.

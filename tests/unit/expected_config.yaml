@@ -1,0 +1,6 @@
+db:
+  path: "/var"
+  binaries-path: "/usr/bin"
+upf:
+  interfaces: ['n3', 'n6']
+  n3-address: 192.168.252.3

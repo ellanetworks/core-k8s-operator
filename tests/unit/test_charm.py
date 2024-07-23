@@ -3,19 +3,27 @@
 
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import yaml
 from charm import EllaK8SCharm
 from ops import ActiveStatus, WaitingStatus
-from scenario import Container, Context, Mount, State
+from scenario import Container, Context, ExecOutput, Mount, State
 
 METADATA = yaml.safe_load(Path("charmcraft.yaml").read_text())
-
 NAMESPACE = "whatever"
 
 
 class TestCharm:
+    patcher_k8s_ebpf = patch("charm.EBPFVolume")
+    patcher_k8s_multus = patch("charm.KubernetesMultusCharmLib")
+
+    @pytest.fixture(autouse=True)
+    def setUp(self):
+        TestCharm.patcher_k8s_ebpf.start()
+        TestCharm.patcher_k8s_multus.start()
+
     @pytest.fixture(autouse=True)
     def context(self):
         self.ctx = Context(charm_type=EllaK8SCharm, juju_version="3.1")
@@ -70,7 +78,7 @@ class TestCharm:
 
             assert state_out.unit_status == ActiveStatus("")
 
-    def test_given_config_file_not_written_when_update_status_then_config_file_is_written(
+    def test_given_config_file_not_written_when_pebble_ready_then_config_file_is_written(
         self,
     ):
         with tempfile.NamedTemporaryFile() as local_file:
@@ -78,11 +86,47 @@ class TestCharm:
                 name="ella",
                 can_connect=True,
                 mounts={"config": Mount("/etc/ella/ella.yaml", local_file.name)},
+                exec_mock={
+                    ("ip", "route", "show"):  # this is the command we're mocking
+                    ExecOutput(
+                        return_code=0,  # this data structure contains all we need to mock the call.
+                        stdout="",
+                    ),
+                    (
+                        "ip",
+                        "route",
+                        "replace",
+                        "default",
+                        "via",
+                        "192.168.250.1",
+                        "metric",
+                        "110",
+                    ): ExecOutput(
+                        return_code=0,
+                        stdout="",
+                    ),
+                    (
+                        "ip",
+                        "route",
+                        "replace",
+                        "192.168.251.0/24",
+                        "via",
+                        "192.168.252.1",
+                    ): ExecOutput(
+                        return_code=0,
+                        stdout="",
+                    ),
+                },
             )
-            state_in = State(containers=[container])
+            state_in = State(
+                containers=[container],
+                leader=True,
+            )
 
             self.ctx.run(
                 container.pebble_ready_event(),
                 state_in,
             )
-            assert local_file.read().decode() == 'mongoDBBinariesPath: "/usr/bin"'
+
+            with open("tests/unit/expected_config.yaml", "r") as f:
+                assert local_file.read().decode() == f.read()
