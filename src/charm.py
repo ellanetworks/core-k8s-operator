@@ -112,6 +112,7 @@ class EllaK8SCharm(CharmBase):
             logger.warning("Pebble API is not ready")
             return
         if not self._kubernetes_multus.multus_is_available():
+            logger.warning("Multus is not available")
             return
         self.on.nad_config_changed.emit()
         if not self._ebpf_volume.is_created():
