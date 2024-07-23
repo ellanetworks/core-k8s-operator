@@ -6,6 +6,7 @@
 import dataclasses
 import logging
 from ipaddress import IPv4Address, IPv4Network
+from typing import List
 
 import ops
 from pydantic import (
@@ -39,28 +40,26 @@ class EllaConfig(BaseModel):
 
     model_config = ConfigDict(alias_generator=to_kebab, use_enum_values=True)
 
-    interfaces: str = "[n3]"
+    interfaces: List[str] = ["n3", "n6"]
     logging_level: str = "info"
     gnb_subnet: IPv4Network = IPv4Network("192.168.251.0/24")
     n3_ip: IPv4Address = IPv4Address("192.168.252.3")
     n3_gateway_ip: IPv4Address = IPv4Address("192.168.252.1")
     n6_ip: IPv4Address = IPv4Address("192.168.250.3")
     n6_gateway_ip: IPv4Address = IPv4Address("192.168.250.1")
-    pfcp_node_id: IPv4Address = IPv4Address("127.0.0.1")
 
 
 @dataclasses.dataclass
 class CharmConfig:
     """Represent the configuration of the charm."""
 
-    interfaces: str
+    interfaces: List[str]
     logging_level: str
     gnb_subnet: IPv4Network
     n3_ip: IPv4Address
     n3_gateway_ip: IPv4Address
     n6_ip: IPv4Address
     n6_gateway_ip: IPv4Address
-    pfcp_node_id: IPv4Address
 
     def __init__(self, *, ella_config: EllaConfig):
         """Initialize a new instance of the CharmConfig class.
@@ -75,7 +74,6 @@ class CharmConfig:
         self.n3_gateway_ip = ella_config.n3_gateway_ip
         self.n6_ip = ella_config.n6_ip
         self.n6_gateway_ip = ella_config.n6_gateway_ip
-        self.pfcp_node_id = ella_config.pfcp_node_id
 
     @classmethod
     def from_charm(
@@ -86,7 +84,21 @@ class CharmConfig:
         try:
             # ignoring because mypy fails with:
             # "has incompatible type "**dict[str, str]"; expected ...""
-            return cls(ella_config=EllaConfig(**dict(charm.config.items())))  # type: ignore
+            interfaces = str(charm.config.get("interfaces", "[n3,n6]"))
+            return cls(
+                ella_config=EllaConfig(
+                    interfaces=interfaces.replace(" ", "")
+                    .replace("[", "")
+                    .replace("]", "")
+                    .split(","),
+                    logging_level=str(charm.config.get("logging_level", "info")),
+                    gnb_subnet=IPv4Network(charm.config.get("gnb_subnet", "192.168.251.0/24")),
+                    n3_ip=IPv4Address(charm.config.get("n3_ip", "192.168.252.3")),
+                    n3_gateway_ip=IPv4Address(charm.config.get("n3_gateway_ip", "192.168.252.1")),
+                    n6_ip=IPv4Address(charm.config.get("n6_ip", "192.168.250.3")),
+                    n6_gateway_ip=IPv4Address(charm.config.get("n6_gateway_ip", "192.168.250.1")),
+                )
+            )
         except ValidationError as exc:
             error_fields: list = []
             for error in exc.errors():

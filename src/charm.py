@@ -34,7 +34,7 @@ N3_INTERFACE_NAME = "n3"
 N6_INTERFACE_NAME = "n6"
 
 
-def render_config_file() -> str:
+def render_config_file(interfaces: List[str], n3_address: str) -> str:
     """Render the config file.
 
     Returns:
@@ -42,7 +42,10 @@ def render_config_file() -> str:
     """
     jinja2_environment = Environment(loader=FileSystemLoader(CONFIG_TEMPLATE_DIR_PATH))
     template = jinja2_environment.get_template(CONFIG_TEMPLATE_NAME)
-    content = template.render()
+    content = template.render(
+        interfaces=interfaces,
+        n3_address=n3_address,
+    )
     return content
 
 
@@ -68,6 +71,7 @@ class EllaK8SCharm(CharmBase):
         try:
             self._charm_config: CharmConfig = CharmConfig.from_charm(charm=self)
         except CharmConfigInvalidError:
+            logger.error("Invalid configuration")
             return
         self._kubernetes_multus = KubernetesMultusCharmLib(
             charm=self,
@@ -241,7 +245,10 @@ class EllaK8SCharm(CharmBase):
         return [n3_nad, n6_nad]
 
     def _generate_config_file(self) -> str:
-        return render_config_file()
+        return render_config_file(
+            interfaces=self._charm_config.interfaces,
+            n3_address=str(self._charm_config.n3_ip),
+        )
 
     def _is_config_update_required(self, content: str) -> bool:
         if not self._config_file_is_written() or not self._config_file_content_matches(

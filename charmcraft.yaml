@@ -37,7 +37,7 @@ config:
     interfaces:
       type: string
       default: "[n3,n6]"
-      description: List of network interfaces handling N3 (GTP) & N6 (SGi) traffic. eUPF attaches XDP hook to every interface in this list.
+      description: List of network interfaces handling N3 (GTP) & N6 (SGi) traffic. Ella attaches XDP hook to every interface in this list.
     logging-level:
       type: string
       default: debug
@@ -49,7 +49,7 @@ config:
     n6-ip:
       type: string
       default: 192.168.250.3
-      description: IP address used by the UPF's Core interface.
+      description: IP address used by the Ella's Core interface.
     n6-gateway-ip:
       type: string
       default: 192.168.250.1
@@ -57,7 +57,7 @@ config:
     n3-ip:
       type: string
       default: 192.168.252.3
-      description: IP address used by the UPF's Access interface.
+      description: IP address used by the Ella's Access interface.
     n3-gateway-ip:
       type: string
       default: 192.168.252.1
