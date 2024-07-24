@@ -21,6 +21,10 @@ from lightkube.resources.core_v1 import Pod
 logger = logging.getLogger(__name__)
 
 
+class KubernetesEllaError(Exception):
+    """Base exception for KubernetesElla."""
+
+
 class EBPFVolume:
     """eBPF volume for Ella."""
 
@@ -53,7 +57,7 @@ class EBPFVolume:
             if e.status.reason == "Unauthorized":
                 logger.debug("kube-apiserver not ready yet")
             else:
-                raise RuntimeError(f"Pod `{self._pod_name}` not found")
+                raise KubernetesEllaError(f"Pod `{self._pod_name}` not found")
             logger.info("Pod `%s` not found", self._pod_name)
             return False
         pod_has_volumemount = self._pod_contains_requested_volumemount(
@@ -73,7 +77,7 @@ class EBPFVolume:
             if e.status.reason == "Unauthorized":
                 logger.debug("kube-apiserver not ready yet")
             else:
-                raise RuntimeError(f"Could not get statefulset `{self.app_name}`")
+                raise KubernetesEllaError(f"Could not get statefulset `{self.app_name}`")
             logger.info("Statefulset `%s` not found", self.app_name)
             return False
 
@@ -102,7 +106,7 @@ class EBPFVolume:
         try:
             return next(iter(filter(lambda ctr: ctr.name == container_name, containers)))
         except StopIteration:
-            raise RuntimeError(f"Container `{container_name}` not found")
+            raise KubernetesEllaError(f"Container `{container_name}` not found")
 
     def _pod_contains_requested_volumemount(
         self,
@@ -122,7 +126,7 @@ class EBPFVolume:
                 res=StatefulSet, name=self.app_name, namespace=self.namespace
             )
         except ApiError:
-            raise RuntimeError(f"Could not get statefulset `{self.app_name}`")
+            raise KubernetesEllaError(f"Could not get statefulset `{self.app_name}`")
 
         containers: Iterable[Container] = statefulset.spec.template.spec.containers  # type: ignore[attr-defined]
         container = self._get_container(container_name=self.container_name, containers=containers)
@@ -137,7 +141,7 @@ class EBPFVolume:
         try:
             self.client.replace(obj=statefulset)
         except ApiError:
-            raise RuntimeError(f"Could not replace statefulset `{self.app_name}`")
+            raise KubernetesEllaError(f"Could not replace statefulset `{self.app_name}`")
         logger.info("Replaced `%s` statefulset", self.app_name)
 
     @property

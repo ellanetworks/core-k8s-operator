@@ -15,7 +15,7 @@ from charms.kubernetes_charm_libraries.v0.multus import (
     NetworkAttachmentDefinition,
 )
 from jinja2 import Environment, FileSystemLoader
-from kubernetes_ella import EBPFVolume
+from kubernetes_ella import EBPFVolume, KubernetesEllaError
 from lightkube.models.meta_v1 import ObjectMeta
 from ops import ActiveStatus, CharmBase, EventBase, EventSource, Framework, WaitingStatus, main
 from ops.charm import CharmEvents, CollectStatusEvent
@@ -120,7 +120,11 @@ class EllaK8SCharm(CharmBase):
             return
         self.on.nad_config_changed.emit()
         if not self._ebpf_volume.is_created():
-            self._ebpf_volume.create()
+            try:
+                self._ebpf_volume.create()
+            except KubernetesEllaError as e:
+                logger.error("Failed to create eBPF volume: %s", e)
+                return
         if not self._route_exists(
             dst="default",
             via=str(self._charm_config.n6_gateway_ip),
@@ -138,14 +142,7 @@ class EllaK8SCharm(CharmBase):
 
     def _route_exists(self, dst: str, via: str | None) -> bool:
         """Return whether the specified route exist."""
-        try:
-            stdout, stderr = self._exec_command_in_workload(command="ip route show")
-        except ExecError as e:
-            logger.error("Failed retrieving routes: %s", e.stderr)
-            return False
-        except FileNotFoundError as e:
-            logger.error("Failed retrieving routes: %s", e)
-            return False
+        stdout, stderr = self._exec_command_in_workload(command="ip route show")
         for line in stdout.splitlines():
             if f"{dst} via {via}" in line:
                 return True
@@ -153,40 +150,42 @@ class EllaK8SCharm(CharmBase):
 
     def _create_default_route(self) -> None:
         """Create ip route towards core network."""
-        try:
-            self._exec_command_in_workload(
-                command=f"ip route replace default via {self._charm_config.n6_gateway_ip} metric 110"
-            )
-        except ExecError as e:
-            logger.error("Failed to create core network route: %s", e.stderr)
-            return
-        except FileNotFoundError as e:
-            logger.error("Failed to create core network route: %s", e)
+        stdout, stderr = self._exec_command_in_workload(
+            command=f"ip route replace default via {self._charm_config.n6_gateway_ip} metric 110"
+        )
+        if stderr:
+            logger.error("Failed to create default route: %s", stderr)
             return
         logger.info("Default core network route created")
 
     def _create_ran_route(self) -> None:
         """Create ip route towards gnb-subnet."""
-        try:
-            self._exec_command_in_workload(
-                command=f"ip route replace {self._charm_config.gnb_subnet} via {self._charm_config.n3_gateway_ip}"
-            )
-        except ExecError as e:
-            logger.error("Failed to create route to gnb-subnet: %s", e.stderr)
-            return
-        except FileNotFoundError as e:
-            logger.error("Failed to create route to gnb-subnet: %s", e)
+        stdout, stderr = self._exec_command_in_workload(
+            command=f"ip route replace {self._charm_config.gnb_subnet} via {self._charm_config.n3_gateway_ip}"
+        )
+        if stderr:
+            logger.error("Failed to create route to gnb-subnet: %s", stderr)
             return
         logger.info("Route to gnb-subnet created")
 
     def _exec_command_in_workload(
         self, command: str, timeout: Optional[int] = 30, environment: Optional[dict] = None
     ) -> Tuple[str, str | None]:
-        process = self.container.exec(
-            command=command.split(),
-            timeout=timeout,
-            environment=environment,
-        )
+        try:
+            process = self.container.exec(
+                command=command.split(),
+                timeout=timeout,
+                environment=environment,
+            )
+        except ExecError as e:
+            logger.error("Failed executing command: %s", e.stderr)
+            return "", e.stderr
+        except FileNotFoundError as e:
+            logger.error("Failed executing command: %s", e)
+            return "", str(e)
+        except ConnectionError as e:
+            logger.error("Failed executing command: %s", e)
+            return "", str(e)
         return process.wait_output()
 
     def _configure_pebble(self, restart=False) -> None:
