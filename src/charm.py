@@ -90,9 +90,8 @@ class EllaK8SCharm(CharmBase):
         )
         self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
         self.framework.observe(self.on.update_status, self._configure)
-        framework.observe(self.on["ella"].pebble_ready, self._configure)
-        framework.observe(self.on.update_status, self._configure)
-        framework.observe(self.on.config_changed, self._configure)
+        self.framework.observe(self.on["ella"].pebble_ready, self._configure)
+        self.framework.observe(self.on.config_changed, self._configure)
 
     def _on_collect_status(self, event: CollectStatusEvent):
         """Handle the collect status event."""

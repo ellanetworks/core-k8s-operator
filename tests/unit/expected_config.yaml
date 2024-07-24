@@ -1,5 +1,5 @@
 db:
-  path: "/var"
+  path: "/var/lib/ella"
   binaries-path: "/usr/bin"
 upf:
   interfaces: ['n3', 'n6']
