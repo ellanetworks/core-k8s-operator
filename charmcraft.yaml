@@ -68,3 +68,7 @@ config:
       type: string
       default: 192.168.252.1
       description: Gateway IP address to the Access Network.
+
+requires:
+  database:
+    interface: mongodb_client

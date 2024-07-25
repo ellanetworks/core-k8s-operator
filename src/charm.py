@@ -9,6 +9,7 @@ import logging
 from typing import List, Optional, Tuple
 
 from charm_config import CharmConfig, CharmConfigInvalidError
+from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires  # type: ignore[import]
 from charms.kubernetes_charm_libraries.v0.multus import (
     KubernetesMultusCharmLib,
     NetworkAnnotation,
@@ -17,7 +18,16 @@ from charms.kubernetes_charm_libraries.v0.multus import (
 from jinja2 import Environment, FileSystemLoader
 from kubernetes_ella import EBPFVolume
 from lightkube.models.meta_v1 import ObjectMeta
-from ops import ActiveStatus, CharmBase, EventBase, EventSource, Framework, WaitingStatus, main
+from ops import (
+    ActiveStatus,
+    BlockedStatus,
+    CharmBase,
+    EventBase,
+    EventSource,
+    Framework,
+    WaitingStatus,
+    main,
+)
 from ops.charm import CharmEvents, CollectStatusEvent
 from ops.pebble import ExecError, Layer
 
@@ -32,9 +42,11 @@ N3_NETWORK_ATTACHMENT_DEFINITION_NAME = "n3-net"
 N6_NETWORK_ATTACHMENT_DEFINITION_NAME = "n6-net"
 N3_INTERFACE_NAME = "n3"
 N6_INTERFACE_NAME = "n6"
+DATABASE_RELATION_NAME = "database"
+DATABASE_NAME = "ella"
 
 
-def render_config_file(interfaces: List[str], n3_address: str) -> str:
+def render_config_file(interfaces: List[str], n3_address: str, database_url: str) -> str:
     """Render the config file.
 
     Returns:
@@ -45,6 +57,7 @@ def render_config_file(interfaces: List[str], n3_address: str) -> str:
     content = template.render(
         interfaces=interfaces,
         n3_address=n3_address,
+        database_url=database_url,
     )
     return content
 
@@ -73,6 +86,9 @@ class EllaK8SCharm(CharmBase):
         except CharmConfigInvalidError:
             logger.error("Invalid configuration")
             return
+        self._database = DatabaseRequires(
+            self, relation_name=DATABASE_RELATION_NAME, database_name=DATABASE_NAME
+        )
         self._kubernetes_multus = KubernetesMultusCharmLib(
             charm=self,
             container_name=self._container_name,
@@ -88,16 +104,26 @@ class EllaK8SCharm(CharmBase):
             app_name=self.model.app.name,
             unit_name=self.model.unit.name,
         )
+        self.framework.observe(self._database.on.database_created, self._configure)
         self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
         self.framework.observe(self.on.update_status, self._configure)
-        framework.observe(self.on["ella"].pebble_ready, self._configure)
-        framework.observe(self.on.update_status, self._configure)
-        framework.observe(self.on.config_changed, self._configure)
+        self.framework.observe(self.on["ella"].pebble_ready, self._configure)
+        self.framework.observe(self.on.config_changed, self._configure)
 
     def _on_collect_status(self, event: CollectStatusEvent):
         """Handle the collect status event."""
         if not self.container.can_connect():
             event.add_status(WaitingStatus("waiting for Pebble API"))
+            return
+        if missing_relations := self._missing_relations():
+            event.add_status(
+                BlockedStatus(f"Waiting for {', '.join(missing_relations)} relation(s)")
+            )
+            logger.info("Waiting for %s  relation(s)", ", ".join(missing_relations))
+            return
+        if not self._database_is_available():
+            event.add_status(WaitingStatus("Waiting for the amf database to be available"))
+            logger.info("Waiting for the amf database to be available")
             return
         if not self._config_file_is_written():
             event.add_status(WaitingStatus("waiting for config file"))
@@ -135,6 +161,31 @@ class EllaK8SCharm(CharmBase):
         if config_update_required := self._is_config_update_required(desired_config_file):
             self._push_config_file(content=desired_config_file)
         self._configure_pebble(restart=config_update_required)
+
+    def _missing_relations(self) -> List[str]:
+        """Return list of missing relations.
+
+        If all the relations are created, it returns an empty list.
+
+        Returns:
+            list: missing relation names.
+        """
+        missing_relations = []
+        for relation in [DATABASE_RELATION_NAME]:
+            if not self._relation_created(relation):
+                missing_relations.append(relation)
+        return missing_relations
+
+    def _relation_created(self, relation_name: str) -> bool:
+        return bool(self.model.relations.get(relation_name))
+
+    def _database_is_available(self) -> bool:
+        """Return True if the database is available.
+
+        Returns:
+            bool: True if the database is available.
+        """
+        return self._database.is_resource_created()
 
     def _route_exists(self, dst: str, via: str | None) -> bool:
         """Return whether the specified route exist."""
@@ -257,7 +308,13 @@ class EllaK8SCharm(CharmBase):
         return render_config_file(
             interfaces=self._charm_config.interfaces,
             n3_address=str(self._charm_config.n3_ip),
+            database_url=self._get_database_info()["uris"].split(",")[0],
         )
+
+    def _get_database_info(self) -> dict:
+        if not self._database_is_available():
+            raise RuntimeError(f"Database `{DATABASE_NAME}` is not available")
+        return self._database.fetch_relation_data()[self._database.relations[0].id]
 
     def _is_config_update_required(self, content: str) -> bool:
         if not self._config_file_is_written() or not self._config_file_content_matches(
