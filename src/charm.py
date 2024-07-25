@@ -122,8 +122,8 @@ class EllaK8SCharm(CharmBase):
             logger.info("Waiting for %s  relation(s)", ", ".join(missing_relations))
             return
         if not self._database_is_available():
-            event.add_status(WaitingStatus("Waiting for the amf database to be available"))
-            logger.info("Waiting for the amf database to be available")
+            event.add_status(WaitingStatus("Waiting for the database to be available"))
+            logger.info("Waiting for the database to be available")
             return
         if not self._config_file_is_written():
             event.add_status(WaitingStatus("waiting for config file"))
@@ -163,13 +163,6 @@ class EllaK8SCharm(CharmBase):
         self._configure_pebble(restart=config_update_required)
 
     def _missing_relations(self) -> List[str]:
-        """Return list of missing relations.
-
-        If all the relations are created, it returns an empty list.
-
-        Returns:
-            list: missing relation names.
-        """
         missing_relations = []
         for relation in [DATABASE_RELATION_NAME]:
             if not self._relation_created(relation):
@@ -180,11 +173,6 @@ class EllaK8SCharm(CharmBase):
         return bool(self.model.relations.get(relation_name))
 
     def _database_is_available(self) -> bool:
-        """Return True if the database is available.
-
-        Returns:
-            bool: True if the database is available.
-        """
         return self._database.is_resource_created()
 
     def _route_exists(self, dst: str, via: str | None) -> bool:
