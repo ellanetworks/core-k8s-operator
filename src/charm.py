@@ -157,6 +157,9 @@ class EllaK8SCharm(CharmBase):
             via=str(self._charm_config.n3_gateway_ip),
         ):
             self._create_ran_route()
+        if not self._database_is_available():
+            logger.warning("Database is not available")
+            return
         desired_config_file = self._generate_config_file()
         if config_update_required := self._is_config_update_required(desired_config_file):
             self._push_config_file(content=desired_config_file)
