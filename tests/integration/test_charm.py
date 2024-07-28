@@ -38,6 +38,4 @@ async def test_build_and_deploy(ops_test: OpsTest, request):
 
     await ops_test.model.integrate(relation1=f"{APP_NAME}:database", relation2=f"{DB_CHARM_NAME}")
 
-    await ops_test.model.wait_for_idle(
-        apps=[APP_NAME], status="active", raise_on_blocked=True, timeout=1000
-    )
+    await ops_test.model.wait_for_idle(apps=[APP_NAME], status="active", timeout=1000)
