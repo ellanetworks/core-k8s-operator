@@ -46,7 +46,9 @@ DATABASE_RELATION_NAME = "database"
 DATABASE_NAME = "ella"
 
 
-def render_config_file(interfaces: List[str], n3_address: str, database_url: str) -> str:
+def render_config_file(
+    interfaces: List[str], n3_address: str, database_url: str, database_name: str
+) -> str:
     """Render the config file.
 
     Returns:
@@ -58,6 +60,7 @@ def render_config_file(interfaces: List[str], n3_address: str, database_url: str
         interfaces=interfaces,
         n3_address=n3_address,
         database_url=database_url,
+        database_name=database_name,
     )
     return content
 
@@ -298,6 +301,7 @@ class EllaK8SCharm(CharmBase):
             interfaces=self._charm_config.interfaces,
             n3_address=str(self._charm_config.n3_ip),
             database_url=self._get_database_info()["uris"].split(",")[0],
+            database_name=DATABASE_NAME,
         )
 
     def _get_database_info(self) -> dict:
