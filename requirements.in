@@ -1,4 +1,4 @@
 lightkube
 lightkube-models
 ops ~= 2.14
-pydantic==2.6.4
+pydantic==2.8.2
