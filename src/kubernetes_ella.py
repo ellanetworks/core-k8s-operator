@@ -4,7 +4,7 @@
 """Kubernetes specific code for Ella."""
 
 import logging
-from typing import Iterable
+from typing import Iterable, Optional, Tuple
 
 from lightkube.core.client import Client
 from lightkube.core.exceptions import ApiError
@@ -12,11 +12,14 @@ from lightkube.models.apps_v1 import StatefulSetSpec
 from lightkube.models.core_v1 import (
     Container,
     HostPathVolumeSource,
+    ServicePort,
+    ServiceSpec,
     Volume,
     VolumeMount,
 )
+from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.apps_v1 import StatefulSet
-from lightkube.resources.core_v1 import Pod
+from lightkube.resources.core_v1 import Pod, Service
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +56,8 @@ class EBPFVolume:
             if e.status.reason == "Unauthorized":
                 logger.debug("kube-apiserver not ready yet")
             else:
-                raise RuntimeError(f"Pod `{self._pod_name}` not found")
+                logger.error("Could not get pod `%s`", self._pod_name)
+                return False
             logger.info("Pod `%s` not found", self._pod_name)
             return False
         pod_has_volumemount = self._pod_contains_requested_volumemount(
@@ -73,7 +77,8 @@ class EBPFVolume:
             if e.status.reason == "Unauthorized":
                 logger.debug("kube-apiserver not ready yet")
             else:
-                raise RuntimeError(f"Could not get statefulset `{self.app_name}`")
+                logger.error("Could not get statefulset `%s`", self.app_name)
+                return False
             logger.info("Statefulset `%s` not found", self.app_name)
             return False
 
@@ -98,11 +103,14 @@ class EBPFVolume:
         return requested_volume in statefulset_spec.template.spec.volumes
 
     @classmethod
-    def _get_container(cls, container_name: str, containers: Iterable[Container]) -> Container:
+    def _get_container(
+        cls, container_name: str, containers: Iterable[Container]
+    ) -> Optional[Container]:
         try:
             return next(iter(filter(lambda ctr: ctr.name == container_name, containers)))
         except StopIteration:
-            raise RuntimeError(f"Container `{container_name}` not found")
+            logger.error("Container `%s` not found", container_name)
+            return
 
     def _pod_contains_requested_volumemount(
         self,
@@ -111,6 +119,8 @@ class EBPFVolume:
         requested_volumemount: VolumeMount,
     ) -> bool:
         container = self._get_container(container_name=container_name, containers=containers)
+        if not container:
+            return False
         if not container.volumeMounts:
             return False
         return requested_volumemount in container.volumeMounts
@@ -122,10 +132,14 @@ class EBPFVolume:
                 res=StatefulSet, name=self.app_name, namespace=self.namespace
             )
         except ApiError:
-            raise RuntimeError(f"Could not get statefulset `{self.app_name}`")
+            logger.error("Could not get statefulset `%s`", self.app_name)
+            return
 
         containers: Iterable[Container] = statefulset.spec.template.spec.containers  # type: ignore[attr-defined]
         container = self._get_container(container_name=self.container_name, containers=containers)
+        if not container:
+            logger.error("Could not get container `%s`", self.container_name)
+            return
         if not container.volumeMounts:
             container.volumeMounts = [self.requested_volumemount]
         else:
@@ -137,14 +151,66 @@ class EBPFVolume:
         try:
             self.client.replace(obj=statefulset)
         except ApiError:
-            raise RuntimeError(f"Could not replace statefulset `{self.app_name}`")
+            logger.error("Could not replace statefulset `%s`", self.app_name)
+            return
         logger.info("Replaced `%s` statefulset", self.app_name)
 
     @property
     def _pod_name(self) -> str:
-        """Name of the unit's pod.
-
-        Returns:
-            str: A string containing the name of the current unit's pod.
-        """
+        """Name of the unit's pod."""
         return "-".join(self.unit_name.rsplit("/", 1))
+
+
+class AMFService:
+    """Class representing the NGAPP Service for the AMF."""
+
+    def __init__(self, namespace: str, name: str, app_name: str, ngapp_port: int):
+        self.client = Client()
+        self.namespace = namespace
+        self.name = name
+        self.app_name = app_name
+        self.ngapp_port = ngapp_port
+
+    def is_created(self) -> bool:
+        """Check whether load balancer service is created."""
+        try:
+            self.client.get(Service, name=self.name, namespace=self.namespace)
+        except ApiError:
+            return False
+        return True
+
+    def create(self) -> None:
+        """Create NGAPP load balancer service."""
+        self.client.apply(
+            Service(
+                apiVersion="v1",
+                kind="Service",
+                metadata=ObjectMeta(
+                    namespace=self.namespace,
+                    name=self.name,
+                ),
+                spec=ServiceSpec(
+                    selector={"app.kubernetes.io/name": self.app_name},
+                    ports=[
+                        ServicePort(name="ngapp", port=self.ngapp_port, protocol="SCTP"),
+                    ],
+                    type="LoadBalancer",
+                ),
+            ),
+            field_manager=self.app_name,
+        )
+        logger.info("Created/asserted existence of external AMF service")
+
+    def get_info(self) -> Tuple[str, str]:
+        """Return AMF load balancer service information."""
+        service = self.client.get(Service, name=self.name, namespace=self.namespace)
+        if not service.status:
+            return "", ""
+        if not service.status.loadBalancer:
+            return "", ""
+        if not service.status.loadBalancer.ingress:
+            return "", ""
+        return (
+            str(service.status.loadBalancer.ingress[0].ip),
+            str(service.status.loadBalancer.ingress[0].hostname),
+        )

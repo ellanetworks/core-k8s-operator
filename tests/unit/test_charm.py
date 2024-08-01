@@ -18,6 +18,7 @@ DATABASE_LIB_PATH = "charms.data_platform_libs.v0.data_interfaces"
 
 class TestCharm:
     patcher_k8s_ebpf = patch("charm.EBPFVolume")
+    patcher_k8s_amf_service = patch("charm.AMFService")
     patcher_k8s_multus = patch("charm.KubernetesMultusCharmLib")
     patcher_database_is_created = patch(
         f"{DATABASE_LIB_PATH}.DatabaseRequires.is_resource_created"
@@ -29,6 +30,7 @@ class TestCharm:
     @pytest.fixture(autouse=True)
     def setUp(self):
         TestCharm.patcher_k8s_ebpf.start()
+        TestCharm.patcher_k8s_amf_service.start()
         TestCharm.patcher_k8s_multus.start()
         self.mock_db_is_created = TestCharm.patcher_database_is_created.start()
         self.mock_db_relation_data = TestCharm.patcher_database_relation_data.start()

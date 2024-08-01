@@ -1,4 +1,5 @@
 lightkube
 lightkube-models
-ops ~= 2.14
+ops
 pydantic==2.6.4
+pytest-interface-tester
