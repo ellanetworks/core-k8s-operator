@@ -4,7 +4,7 @@
 """Kubernetes specific code for Ella."""
 
 import logging
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Tuple
 
 from lightkube.core.client import Client
 from lightkube.core.exceptions import ApiError
@@ -12,11 +12,14 @@ from lightkube.models.apps_v1 import StatefulSetSpec
 from lightkube.models.core_v1 import (
     Container,
     HostPathVolumeSource,
+    ServicePort,
+    ServiceSpec,
     Volume,
     VolumeMount,
 )
+from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.apps_v1 import StatefulSet
-from lightkube.resources.core_v1 import Pod
+from lightkube.resources.core_v1 import Pod, Service
 
 logger = logging.getLogger(__name__)
 
@@ -154,9 +157,60 @@ class EBPFVolume:
 
     @property
     def _pod_name(self) -> str:
-        """Name of the unit's pod.
-
-        Returns:
-            str: A string containing the name of the current unit's pod.
-        """
+        """Name of the unit's pod."""
         return "-".join(self.unit_name.rsplit("/", 1))
+
+
+class AMFService:
+    """Class representing the NGAPP Service for the AMF."""
+
+    def __init__(self, namespace: str, name: str, app_name: str, ngapp_port: int):
+        self.client = Client()
+        self.namespace = namespace
+        self.name = name
+        self.app_name = app_name
+        self.ngapp_port = ngapp_port
+
+    def is_created(self) -> bool:
+        """Check whether load balancer service is created."""
+        try:
+            self.client.get(Service, name=self.name, namespace=self.namespace)
+        except ApiError:
+            return False
+        return True
+
+    def create(self) -> None:
+        """Create NGAPP load balancer service."""
+        self.client.apply(
+            Service(
+                apiVersion="v1",
+                kind="Service",
+                metadata=ObjectMeta(
+                    namespace=self.namespace,
+                    name=self.name,
+                ),
+                spec=ServiceSpec(
+                    selector={"app.kubernetes.io/name": self.app_name},
+                    ports=[
+                        ServicePort(name="ngapp", port=self.ngapp_port, protocol="SCTP"),
+                    ],
+                    type="LoadBalancer",
+                ),
+            ),
+            field_manager=self.app_name,
+        )
+        logger.info("Created/asserted existence of external AMF service")
+
+    def get_info(self) -> Tuple[str, str]:
+        """Return AMF load balancer service information."""
+        service = self.client.get(Service, name=self.name, namespace=self.namespace)
+        if not service.status:
+            return "", ""
+        if not service.status.loadBalancer:
+            return "", ""
+        if not service.status.loadBalancer.ingress:
+            return "", ""
+        return (
+            str(service.status.loadBalancer.ingress[0].ip),
+            str(service.status.loadBalancer.ingress[0].hostname),
+        )

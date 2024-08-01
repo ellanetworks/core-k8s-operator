@@ -15,8 +15,12 @@ from charms.kubernetes_charm_libraries.v0.multus import (
     NetworkAnnotation,
     NetworkAttachmentDefinition,
 )
+from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
 from jinja2 import Environment, FileSystemLoader
-from kubernetes_ella import EBPFVolume
+from kubernetes_ella import (
+    AMFService,
+    EBPFVolume,
+)
 from lightkube.models.meta_v1 import ObjectMeta
 from ops import (
     ActiveStatus,
@@ -25,6 +29,7 @@ from ops import (
     EventBase,
     EventSource,
     Framework,
+    ModelError,
     WaitingStatus,
     main,
 )
@@ -45,6 +50,8 @@ N6_INTERFACE_NAME = "n6"
 DATABASE_RELATION_NAME = "database"
 DATABASE_NAME = "ella"
 NMS_PORT = 5000
+NGAPP_PORT = 38412
+N2_RELATION_NAME = "fiveg-n2"
 
 
 def render_config_file(
@@ -93,6 +100,7 @@ class EllaK8SCharm(CharmBase):
         self._database = DatabaseRequires(
             self, relation_name=DATABASE_RELATION_NAME, database_name=DATABASE_NAME
         )
+        self.n2_provider = N2Provides(self, N2_RELATION_NAME)
         self._kubernetes_multus = KubernetesMultusCharmLib(
             charm=self,
             container_name=self._container_name,
@@ -107,6 +115,12 @@ class EllaK8SCharm(CharmBase):
             container_name=self._container_name,
             app_name=self.model.app.name,
             unit_name=self.model.unit.name,
+        )
+        self.amf_service = AMFService(
+            namespace=self.model.name,
+            name=f"{self.app.name}-external",
+            app_name=self.app.name,
+            ngapp_port=38412,
         )
         self.unit.set_ports(NMS_PORT)
         self.framework.observe(self._database.on.database_created, self._configure)
@@ -135,7 +149,7 @@ class EllaK8SCharm(CharmBase):
             return
         event.add_status(ActiveStatus())
 
-    def _configure(self, _: EventBase):
+    def _configure(self, _: EventBase):  # noqa: C901
         try:  # workaround for https://github.com/canonical/operator/issues/736
             self._charm_config: CharmConfig = CharmConfig.from_charm(charm=self)  # type: ignore[no-redef]  # noqa: E501
         except CharmConfigInvalidError:
@@ -152,6 +166,8 @@ class EllaK8SCharm(CharmBase):
         self.on.nad_config_changed.emit()
         if not self._ebpf_volume.is_created():
             self._ebpf_volume.create()
+        if not self.amf_service.is_created():
+            self.amf_service.create()
         if not self._route_exists(
             dst="default",
             via=str(self._charm_config.n6_gateway_ip),
@@ -169,6 +185,31 @@ class EllaK8SCharm(CharmBase):
         if config_update_required := self._is_config_update_required(desired_config_file):
             self._push_config_file(content=desired_config_file)
         self._configure_pebble(restart=config_update_required)
+
+    def _set_n2_information(self) -> None:
+        if not self._relation_created(N2_RELATION_NAME):
+            return
+        if not self._service_is_running():
+            return
+        load_balancer_ip, load_balancer_hostname = self.amf_service.get_info()
+        self.n2_provider.set_n2_information(
+            amf_ip_address=load_balancer_ip,
+            amf_hostname=load_balancer_hostname if load_balancer_hostname else self._hostname(),
+            amf_port=NGAPP_PORT,
+        )
+
+    def _hostname(self) -> str:
+        """Build and returns the AMF hostname in the cluster."""
+        return f"{self.model.app.name}-external.{self.model.name}.svc.cluster.local"
+
+    def _service_is_running(self) -> bool:
+        if not self.container.can_connect():
+            return False
+        try:
+            service = self.container.get_service(self._service_name)
+        except ModelError:
+            return False
+        return service.is_running()
 
     def _missing_relations(self) -> List[str]:
         missing_relations = []
