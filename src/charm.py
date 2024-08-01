@@ -185,6 +185,7 @@ class EllaK8SCharm(CharmBase):
         if config_update_required := self._is_config_update_required(desired_config_file):
             self._push_config_file(content=desired_config_file)
         self._configure_pebble(restart=config_update_required)
+        self._set_n2_information()
 
     def _set_n2_information(self) -> None:
         if not self._relation_created(N2_RELATION_NAME):
