@@ -44,6 +44,7 @@ N3_INTERFACE_NAME = "n3"
 N6_INTERFACE_NAME = "n6"
 DATABASE_RELATION_NAME = "database"
 DATABASE_NAME = "ella"
+NMS_PORT = 5000
 
 
 def render_config_file(
@@ -107,6 +108,7 @@ class EllaK8SCharm(CharmBase):
             app_name=self.model.app.name,
             unit_name=self.model.unit.name,
         )
+        self.unit.set_ports(NMS_PORT)
         self.framework.observe(self._database.on.database_created, self._configure)
         self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
         self.framework.observe(self.on.update_status, self._configure)

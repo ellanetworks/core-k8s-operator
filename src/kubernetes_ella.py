@@ -4,7 +4,7 @@
 """Kubernetes specific code for Ella."""
 
 import logging
-from typing import Iterable
+from typing import Iterable, Optional
 
 from lightkube.core.client import Client
 from lightkube.core.exceptions import ApiError
@@ -53,7 +53,8 @@ class EBPFVolume:
             if e.status.reason == "Unauthorized":
                 logger.debug("kube-apiserver not ready yet")
             else:
-                raise RuntimeError(f"Pod `{self._pod_name}` not found")
+                logger.error("Could not get pod `%s`", self._pod_name)
+                return False
             logger.info("Pod `%s` not found", self._pod_name)
             return False
         pod_has_volumemount = self._pod_contains_requested_volumemount(
@@ -73,7 +74,8 @@ class EBPFVolume:
             if e.status.reason == "Unauthorized":
                 logger.debug("kube-apiserver not ready yet")
             else:
-                raise RuntimeError(f"Could not get statefulset `{self.app_name}`")
+                logger.error("Could not get statefulset `%s`", self.app_name)
+                return False
             logger.info("Statefulset `%s` not found", self.app_name)
             return False
 
@@ -98,11 +100,14 @@ class EBPFVolume:
         return requested_volume in statefulset_spec.template.spec.volumes
 
     @classmethod
-    def _get_container(cls, container_name: str, containers: Iterable[Container]) -> Container:
+    def _get_container(
+        cls, container_name: str, containers: Iterable[Container]
+    ) -> Optional[Container]:
         try:
             return next(iter(filter(lambda ctr: ctr.name == container_name, containers)))
         except StopIteration:
-            raise RuntimeError(f"Container `{container_name}` not found")
+            logger.error("Container `%s` not found", container_name)
+            return
 
     def _pod_contains_requested_volumemount(
         self,
@@ -111,6 +116,8 @@ class EBPFVolume:
         requested_volumemount: VolumeMount,
     ) -> bool:
         container = self._get_container(container_name=container_name, containers=containers)
+        if not container:
+            return False
         if not container.volumeMounts:
             return False
         return requested_volumemount in container.volumeMounts
@@ -122,10 +129,14 @@ class EBPFVolume:
                 res=StatefulSet, name=self.app_name, namespace=self.namespace
             )
         except ApiError:
-            raise RuntimeError(f"Could not get statefulset `{self.app_name}`")
+            logger.error("Could not get statefulset `%s`", self.app_name)
+            return
 
         containers: Iterable[Container] = statefulset.spec.template.spec.containers  # type: ignore[attr-defined]
         container = self._get_container(container_name=self.container_name, containers=containers)
+        if not container:
+            logger.error("Could not get container `%s`", self.container_name)
+            return
         if not container.volumeMounts:
             container.volumeMounts = [self.requested_volumemount]
         else:
@@ -137,7 +148,8 @@ class EBPFVolume:
         try:
             self.client.replace(obj=statefulset)
         except ApiError:
-            raise RuntimeError(f"Could not replace statefulset `{self.app_name}`")
+            logger.error("Could not replace statefulset `%s`", self.app_name)
+            return
         logger.info("Replaced `%s` statefulset", self.app_name)
 
     @property
