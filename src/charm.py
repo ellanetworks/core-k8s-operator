@@ -120,7 +120,7 @@ class EllaK8SCharm(CharmBase):
             namespace=self.model.name,
             name=f"{self.app.name}-external",
             app_name=self.app.name,
-            ngapp_port=38412,
+            ngapp_port=NGAPP_PORT,
         )
         self.unit.set_ports(NMS_PORT)
         self.framework.observe(self._database.on.database_created, self._configure)
