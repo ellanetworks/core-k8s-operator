@@ -50,7 +50,8 @@ async def test_build_and_deploy(ops_test: OpsTest, request):
         relation1=f"{APP_NAME}:fiveg-n2", relation2=f"{GNBSIM_CHARM_NAME}:fiveg-n2"
     )
     await ops_test.model.integrate(
-        relation1=f"{APP_NAME}:fiveg_gnb_identity", relation2=f"{GNBSIM_CHARM_NAME}:fiveg_gnb_identity"
+        relation1=f"{APP_NAME}:fiveg_gnb_identity",
+        relation2=f"{GNBSIM_CHARM_NAME}:fiveg_gnb_identity",
     )
 
     await ops_test.model.wait_for_idle(apps=[APP_NAME], status="active", timeout=1000)
