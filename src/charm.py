@@ -6,6 +6,8 @@
 
 import json
 import logging
+from ipaddress import IPv4Address
+from subprocess import CalledProcessError, check_output
 from typing import List, Optional, Tuple
 
 from charm_config import CharmConfig, CharmConfigInvalidError
@@ -16,6 +18,7 @@ from charms.kubernetes_charm_libraries.v0.multus import (
     NetworkAttachmentDefinition,
 )
 from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
+from ella import Ella, GnodeB
 from jinja2 import Environment, FileSystemLoader
 from kubernetes_ella import (
     AMFService,
@@ -52,6 +55,7 @@ DATABASE_NAME = "ella"
 NMS_PORT = 5000
 NGAPP_PORT = 38412
 N2_RELATION_NAME = "fiveg-n2"
+GNB_IDENTITY_RELATION_NAME = "fiveg_gnb_identity"
 
 
 def render_config_file(
@@ -71,6 +75,15 @@ def render_config_file(
         database_name=database_name,
     )
     return content
+
+
+def get_pod_ip() -> Optional[str]:
+    """Return the pod IP using juju client."""
+    try:
+        ip_address = check_output(["unit-get", "private-address"])
+        return str(IPv4Address(ip_address.decode().strip())) if ip_address else None
+    except (CalledProcessError, ValueError):
+        return None
 
 
 class NadConfigChangedEvent(EventBase):
@@ -122,6 +135,7 @@ class EllaK8SCharm(CharmBase):
             app_name=self.app.name,
             ngapp_port=NGAPP_PORT,
         )
+        self.ella = Ella(url=self._ella_endpoint)
         self.unit.set_ports(NMS_PORT)
         self.framework.observe(self._database.on.database_created, self._configure)
         self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
@@ -187,6 +201,40 @@ class EllaK8SCharm(CharmBase):
             self._push_config_file(content=desired_config_file)
         self._configure_pebble(restart=config_update_required)
         self._set_n2_information()
+        self._sync_gnbs()
+
+    @property
+    def _ella_endpoint(self) -> str:
+        return f"http://{get_pod_ip()}:{NMS_PORT}"
+
+    def _get_gnb_config_from_relations(self) -> List[GnodeB]:
+        gnb_name_tac_list = []
+        for gnb_identity_relation in self.model.relations.get(GNB_IDENTITY_RELATION_NAME, []):
+            if not gnb_identity_relation.app:
+                logger.warning(
+                    "Application missing from the %s relation data",
+                    GNB_IDENTITY_RELATION_NAME,
+                )
+                continue
+            gnb_name = gnb_identity_relation.data[gnb_identity_relation.app].get("gnb_name", "")
+            gnb_tac = gnb_identity_relation.data[gnb_identity_relation.app].get("tac", "")
+            if gnb_name and gnb_tac:
+                gnb_name_tac_list.append(GnodeB(name=gnb_name, tac=int(gnb_tac)))
+        return gnb_name_tac_list
+
+    def _sync_gnbs(self) -> None:
+        """Sync the GNBs between the inventory and the relations."""
+        if not self.model.relations.get(GNB_IDENTITY_RELATION_NAME):
+            logger.info("Relation %s not available", GNB_IDENTITY_RELATION_NAME)
+            return
+        inventory_gnb_list = self.ella.get_gnbs_from_inventory()
+        relation_gnb_list = self._get_gnb_config_from_relations()
+        for relation_gnb in relation_gnb_list:
+            if relation_gnb not in inventory_gnb_list:
+                self.ella.add_gnb_to_inventory(relation_gnb)
+        for inventory_gnb in inventory_gnb_list:
+            if inventory_gnb not in relation_gnb_list:
+                self.ella.delete_gnb_from_inventory(inventory_gnb)
 
     def _set_n2_information(self) -> None:
         if not self._relation_created(N2_RELATION_NAME):
