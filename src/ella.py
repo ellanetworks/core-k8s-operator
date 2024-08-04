@@ -72,17 +72,18 @@ class Ella:
         return resources
 
     def _add_resource_to_inventory(self, url: str, resource_name: str, data: dict) -> None:
+        response = requests.post(url, headers=JSON_HEADER, json=data)
         try:
-            response = requests.post(url, headers=JSON_HEADER, json=data)
             response.raise_for_status()
-            logger.info("%s added to ella", resource_name)
         except requests.HTTPError as e:
             logger.error("Failed to add %s to ella: %s", resource_name, e)
+        logger.info("%s added to ella", resource_name)
 
     def _delete_resource_from_inventory(self, inventory_url: str, resource_name: str) -> None:
+        response = requests.delete(inventory_url)
         try:
-            response = requests.delete(inventory_url)
+            
             response.raise_for_status()
-            logger.info(f"{resource_name} removed from webui")
         except requests.HTTPError as e:
-            logger.error(f"Failed to remove {resource_name} from webui: {e}")
+            logger.error("Failed to remove %s from webui: %s", resource_name, e)
+        logger.info("%s removed from webui", resource_name)
