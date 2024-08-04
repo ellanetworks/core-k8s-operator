@@ -17,6 +17,8 @@ DATABASE_LIB_PATH = "charms.data_platform_libs.v0.data_interfaces"
 
 
 class TestCharm:
+    patches_get_pod_ip = patch("charm.get_pod_ip")
+    patcher_ella = patch("charm.Ella")
     patcher_k8s_ebpf = patch("charm.EBPFVolume")
     patcher_k8s_amf_service = patch("charm.AMFService")
     patcher_k8s_multus = patch("charm.KubernetesMultusCharmLib")
@@ -29,6 +31,8 @@ class TestCharm:
 
     @pytest.fixture(autouse=True)
     def setUp(self):
+        TestCharm.patches_get_pod_ip.start()
+        TestCharm.patcher_ella.start()
         TestCharm.patcher_k8s_ebpf.start()
         TestCharm.patcher_k8s_amf_service.start()
         TestCharm.patcher_k8s_multus.start()
