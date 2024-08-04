@@ -72,6 +72,8 @@ config:
 requires:
   database:
     interface: mongodb_client
+  fiveg_gnb_identity:
+    interface: fiveg_gnb_identity
 
 provides:
   fiveg-n2:

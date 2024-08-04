@@ -18,6 +18,9 @@ from charms.kubernetes_charm_libraries.v0.multus import (
     NetworkAttachmentDefinition,
 )
 from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
+from charms.sdcore_gnbsim_k8s.v0.fiveg_gnb_identity import (
+    GnbIdentityRequires,
+)
 from ella import Ella, GnodeB
 from jinja2 import Environment, FileSystemLoader
 from kubernetes_ella import (
@@ -114,6 +117,7 @@ class EllaK8SCharm(CharmBase):
             self, relation_name=DATABASE_RELATION_NAME, database_name=DATABASE_NAME
         )
         self.n2_provider = N2Provides(self, N2_RELATION_NAME)
+        self._gnb_identity = GnbIdentityRequires(self, GNB_IDENTITY_RELATION_NAME)
         self._kubernetes_multus = KubernetesMultusCharmLib(
             charm=self,
             container_name=self._container_name,
@@ -143,6 +147,7 @@ class EllaK8SCharm(CharmBase):
         self.framework.observe(self.on["ella"].pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.fiveg_n2_relation_joined, self._configure)
+        self.framework.observe(self._gnb_identity.on.fiveg_gnb_identity_available, self._configure)
 
     def _on_collect_status(self, event: CollectStatusEvent):
         """Handle the collect status event."""
