@@ -82,7 +82,6 @@ class Ella:
     def _delete_resource_from_inventory(self, inventory_url: str, resource_name: str) -> None:
         response = requests.delete(inventory_url)
         try:
-            
             response.raise_for_status()
         except requests.HTTPError as e:
             logger.error("Failed to remove %s from webui: %s", resource_name, e)
