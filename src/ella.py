@@ -48,7 +48,7 @@ class Ella:
             gnb (GnodeB): The GnodeB to add to the inventory.
         """
         inventory_url = f"{self.url}/{GNB_CONFIG_URL}/{gnb.name}"
-        data = {"tac": gnb.tac}
+        data = {"tac": str(gnb.tac)}
         self._add_resource_to_inventory(inventory_url, gnb.name, data)
 
     def delete_gnb_from_inventory(self, gnb: GnodeB) -> None:
@@ -77,6 +77,7 @@ class Ella:
             response.raise_for_status()
         except requests.HTTPError as e:
             logger.error("Failed to add %s to ella: %s", resource_name, e)
+            logger.error(e.response.text)
         logger.info("%s added to ella", resource_name)
 
     def _delete_resource_from_inventory(self, inventory_url: str, resource_name: str) -> None:
