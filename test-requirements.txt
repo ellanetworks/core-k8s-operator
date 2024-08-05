@@ -12,7 +12,6 @@ cachetools==5.4.0
     # via google-auth
 certifi==2024.7.4
     # via
-    #   -c requirements.txt
     #   kubernetes
     #   requests
 cffi==1.16.0
@@ -23,7 +22,7 @@ charset-normalizer==3.3.2
     # via requests
 codespell==2.3.0
     # via -r test-requirements.in
-coverage[toml]==7.6.0
+coverage[toml]==7.6.1
     # via -r test-requirements.in
 cryptography==43.0.0
     # via paramiko
@@ -38,13 +37,9 @@ google-auth==2.32.0
 hvac==2.3.0
     # via juju
 idna==3.7
-    # via
-    #   -c requirements.txt
-    #   requests
+    # via requests
 iniconfig==2.0.0
-    # via
-    #   -c requirements.txt
-    #   pytest
+    # via pytest
 ipdb==0.13.13
     # via pytest-operator
 ipython==8.26.0
@@ -74,16 +69,11 @@ oauthlib==3.2.2
     #   kubernetes
     #   requests-oauthlib
 ops==2.15.0
-    # via
-    #   -c requirements.txt
-    #   ops-scenario
+    # via ops-scenario
 ops-scenario==6.1.5
-    # via
-    #   -c requirements.txt
-    #   -r test-requirements.in
+    # via -r test-requirements.in
 packaging==24.1
     # via
-    #   -c requirements.txt
     #   juju
     #   pytest
 paramiko==3.4.0
@@ -93,9 +83,7 @@ parso==0.8.4
 pexpect==4.9.0
     # via ipython
 pluggy==1.5.0
-    # via
-    #   -c requirements.txt
-    #   pytest
+    # via pytest
 prompt-toolkit==3.0.47
     # via ipython
 protobuf==5.27.3
@@ -130,7 +118,6 @@ pyright==1.1.374
     # via -r test-requirements.in
 pytest==8.3.2
     # via
-    #   -c requirements.txt
     #   -r test-requirements.in
     #   pytest-asyncio
     #   pytest-operator
@@ -144,7 +131,6 @@ pytz==2024.1
     # via pyrfc3339
 pyyaml==6.0.1
     # via
-    #   -c requirements.txt
     #   juju
     #   kubernetes
     #   ops
@@ -160,7 +146,7 @@ requests-oauthlib==2.0.0
     # via kubernetes
 rsa==4.9
     # via google-auth
-ruff==0.5.5
+ruff==0.5.6
     # via -r test-requirements.in
 six==1.16.0
     # via
@@ -178,9 +164,7 @@ traitlets==5.14.3
     #   ipython
     #   matplotlib-inline
 typing-extensions==4.12.2
-    # via
-    #   -c requirements.txt
-    #   typing-inspect
+    # via typing-inspect
 typing-inspect==0.9.0
     # via juju
 urllib3==2.2.2
@@ -191,7 +175,6 @@ wcwidth==0.2.13
     # via prompt-toolkit
 websocket-client==1.8.0
     # via
-    #   -c requirements.txt
     #   kubernetes
     #   ops
 websockets==12.0
