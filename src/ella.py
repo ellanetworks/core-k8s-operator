@@ -76,8 +76,7 @@ class Ella:
         try:
             response.raise_for_status()
         except requests.HTTPError as e:
-            logger.error("Failed to add %s to ella: %s", resource_name, e)
-            logger.error(e.response.text)
+            logger.error("Failed to add %s to ella: %s. %s", resource_name, e, e.response.text)
         logger.info("%s added to ella", resource_name)
 
     def _delete_resource_from_inventory(self, inventory_url: str, resource_name: str) -> None:
