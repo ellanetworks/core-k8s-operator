@@ -10,7 +10,6 @@ from ipaddress import IPv4Address
 from subprocess import CalledProcessError, check_output
 from typing import List, Optional, Tuple
 
-from charm_config import CharmConfig, CharmConfigInvalidError
 from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires  # type: ignore[import]
 from charms.kubernetes_charm_libraries.v0.multus import (
     KubernetesMultusCharmLib,
@@ -21,12 +20,7 @@ from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
 from charms.sdcore_gnbsim_k8s.v0.fiveg_gnb_identity import (
     GnbIdentityRequires,
 )
-from ella import Ella, GnodeB
 from jinja2 import Environment, FileSystemLoader
-from kubernetes_ella import (
-    AMFService,
-    EBPFVolume,
-)
 from lightkube.models.meta_v1 import ObjectMeta
 from ops import (
     ActiveStatus,
@@ -41,6 +35,13 @@ from ops import (
 )
 from ops.charm import CharmEvents, CollectStatusEvent
 from ops.pebble import ConnectionError, ExecError, Layer
+
+from charm_config import CharmConfig, CharmConfigInvalidError
+from ella import Ella, GnodeB
+from kubernetes_ella import (
+    AMFService,
+    EBPFVolume,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -229,17 +230,14 @@ class EllaK8SCharm(CharmBase):
 
     def _sync_gnbs(self) -> None:
         """Sync the GNBs between the inventory and the relations."""
-        if not self.model.relations.get(GNB_IDENTITY_RELATION_NAME):
-            logger.info("Relation %s not available", GNB_IDENTITY_RELATION_NAME)
-            return
         inventory_gnb_list = self.ella.get_gnbs_from_inventory()
         relation_gnb_list = self._get_gnb_config_from_relations()
         for relation_gnb in relation_gnb_list:
             if relation_gnb not in inventory_gnb_list:
-                self.ella.add_gnb_to_inventory(relation_gnb)
+                self.ella.add_gnb_to_inventory(gnb=relation_gnb)
         for inventory_gnb in inventory_gnb_list:
             if inventory_gnb not in relation_gnb_list:
-                self.ella.delete_gnb_from_inventory(inventory_gnb)
+                self.ella.delete_gnb_from_inventory(gnb=inventory_gnb)
 
     def _set_n2_information(self) -> None:
         if not self._relation_created(N2_RELATION_NAME):

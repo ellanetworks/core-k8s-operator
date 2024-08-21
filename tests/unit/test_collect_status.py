@@ -7,16 +7,17 @@ from unittest.mock import patch
 
 import pytest
 import yaml
-from charm import EllaK8SCharm
 from ops import ActiveStatus, BlockedStatus, WaitingStatus
-from scenario import Container, Context, ExecOutput, Mount, Relation, State
+from scenario import Container, Context, Mount, Relation, State
+
+from charm import EllaK8SCharm
 
 METADATA = yaml.safe_load(Path("charmcraft.yaml").read_text())
 NAMESPACE = "whatever"
 DATABASE_LIB_PATH = "charms.data_platform_libs.v0.data_interfaces"
 
 
-class TestCharm:
+class TestCharmCollectStatus:
     patches_get_pod_ip = patch("charm.get_pod_ip")
     patcher_ella = patch("charm.Ella")
     patcher_k8s_ebpf = patch("charm.EBPFVolume")
@@ -31,13 +32,12 @@ class TestCharm:
 
     @pytest.fixture(autouse=True)
     def setUp(self):
-        TestCharm.patches_get_pod_ip.start()
-        TestCharm.patcher_ella.start()
-        TestCharm.patcher_k8s_ebpf.start()
-        TestCharm.patcher_k8s_amf_service.start()
-        TestCharm.patcher_k8s_multus.start()
-        self.mock_db_is_created = TestCharm.patcher_database_is_created.start()
-        self.mock_db_relation_data = TestCharm.patcher_database_relation_data.start()
+        TestCharmCollectStatus.patches_get_pod_ip.start()
+        TestCharmCollectStatus.patcher_ella.start()
+        TestCharmCollectStatus.patcher_k8s_ebpf.start()
+        TestCharmCollectStatus.patcher_k8s_amf_service.start()
+        TestCharmCollectStatus.patcher_k8s_multus.start()
+        self.mock_db_is_created = TestCharmCollectStatus.patcher_database_is_created.start()
 
     @pytest.fixture(autouse=True)
     def context(self):
@@ -126,57 +126,3 @@ class TestCharm:
             state_out = self.ctx.run("collect_unit_status", state_in)
 
             assert state_out.unit_status == ActiveStatus("")
-
-    def test_given_config_file_not_written_when_pebble_ready_then_config_file_is_written(
-        self,
-    ):
-        with tempfile.NamedTemporaryFile() as local_file:
-            container = Container(
-                name="ella",
-                can_connect=True,
-                mounts={"config": Mount("/etc/ella/ella.yaml", local_file.name)},
-                exec_mock={
-                    ("ip", "route", "show"):  # this is the command we're mocking
-                    ExecOutput(
-                        return_code=0,  # this data structure contains all we need to mock the call.
-                        stdout="",
-                    ),
-                    (
-                        "ip",
-                        "route",
-                        "replace",
-                        "default",
-                        "via",
-                        "192.168.250.1",
-                        "metric",
-                        "110",
-                    ): ExecOutput(
-                        return_code=0,
-                        stdout="",
-                    ),
-                    (
-                        "ip",
-                        "route",
-                        "replace",
-                        "192.168.251.0/24",
-                        "via",
-                        "192.168.252.1",
-                    ): ExecOutput(
-                        return_code=0,
-                        stdout="",
-                    ),
-                },
-            )
-            db_relation = Relation(endpoint="database", interface="mongodb_client")
-            state_in = State(containers=[container], leader=True, relations=[db_relation])
-            self.mock_db_relation_data.return_value = {
-                db_relation.relation_id: {"uris": "mongodb://localhost:27017/ella"}
-            }
-
-            self.ctx.run(
-                container.pebble_ready_event(),
-                state_in,
-            )
-
-            with open("tests/unit/expected_config.yaml", "r") as f:
-                assert local_file.read().decode() == f.read()
