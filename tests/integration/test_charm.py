@@ -89,7 +89,7 @@ async def test_build_and_deploy(ops_test: OpsTest, request):
 
 
 @pytest.mark.abort_on_fail
-async def test_given_sdcore_bundle_and_gnbsim_deployed_when_start_simulation_then_simulation_success_status_is_true(  # noqa: E501
+async def test_given_ella_and_gnbsim_deployed_when_start_simulation_then_simulation_success_status_is_true(  # noqa: E501
     ops_test: OpsTest, configure_ella
 ):
     assert ops_test.model
