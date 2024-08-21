@@ -10,8 +10,7 @@ from ipaddress import IPv4Address
 from subprocess import CalledProcessError, check_output
 from typing import List, Optional, Tuple
 
-from charm_config import CharmConfig, CharmConfigInvalidError
-from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires  # type: ignore[import]
+from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.kubernetes_charm_libraries.v0.multus import (
     KubernetesMultusCharmLib,
     NetworkAnnotation,
@@ -21,12 +20,7 @@ from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
 from charms.sdcore_gnbsim_k8s.v0.fiveg_gnb_identity import (
     GnbIdentityRequires,
 )
-from ella import Ella, GnodeB
 from jinja2 import Environment, FileSystemLoader
-from kubernetes_ella import (
-    AMFService,
-    EBPFVolume,
-)
 from lightkube.models.meta_v1 import ObjectMeta
 from ops import (
     ActiveStatus,
@@ -41,6 +35,13 @@ from ops import (
 )
 from ops.charm import CharmEvents, CollectStatusEvent
 from ops.pebble import ConnectionError, ExecError, Layer
+
+from charm_config import CharmConfig, CharmConfigInvalidError
+from ella import Ella, GnodeB
+from kubernetes_ella import (
+    AMFService,
+    EBPFVolume,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -169,9 +170,9 @@ class EllaK8SCharm(CharmBase):
             return
         event.add_status(ActiveStatus())
 
-    def _configure(self, _: EventBase):  # noqa: C901
+    def _configure(self, _: EventBase):
         try:  # workaround for https://github.com/canonical/operator/issues/736
-            self._charm_config: CharmConfig = CharmConfig.from_charm(charm=self)  # type: ignore[no-redef]  # noqa: E501
+            self._charm_config: CharmConfig = CharmConfig.from_charm(charm=self)
         except CharmConfigInvalidError:
             return
         if not self.unit.is_leader():
@@ -184,10 +185,26 @@ class EllaK8SCharm(CharmBase):
             logger.warning("Multus is not available")
             return
         self.on.nad_config_changed.emit()
+        self._configure_ebpf_volume()
+        self._configure_amf_service()
+        self._configure_routes()
+        if not self._database_is_available():
+            logger.warning("Database is not available")
+            return
+        changed = self._configure_config_file()
+        self._configure_pebble(restart=changed)
+        self._set_n2_information()
+        self._sync_gnbs()
+
+    def _configure_ebpf_volume(self):
         if not self._ebpf_volume.is_created():
             self._ebpf_volume.create()
+
+    def _configure_amf_service(self):
         if not self.amf_service.is_created():
             self.amf_service.create()
+
+    def _configure_routes(self):
         if not self._route_exists(
             dst="default",
             via=str(self._charm_config.n6_gateway_ip),
@@ -198,15 +215,13 @@ class EllaK8SCharm(CharmBase):
             via=str(self._charm_config.n3_gateway_ip),
         ):
             self._create_ran_route()
-        if not self._database_is_available():
-            logger.warning("Database is not available")
-            return
+
+    def _configure_config_file(self):
         desired_config_file = self._generate_config_file()
-        if config_update_required := self._is_config_update_required(desired_config_file):
+        if self._is_config_update_required(desired_config_file):
             self._push_config_file(content=desired_config_file)
-        self._configure_pebble(restart=config_update_required)
-        self._set_n2_information()
-        self._sync_gnbs()
+            return True
+        return False
 
     @property
     def _ella_endpoint(self) -> str:
@@ -229,17 +244,14 @@ class EllaK8SCharm(CharmBase):
 
     def _sync_gnbs(self) -> None:
         """Sync the GNBs between the inventory and the relations."""
-        if not self.model.relations.get(GNB_IDENTITY_RELATION_NAME):
-            logger.info("Relation %s not available", GNB_IDENTITY_RELATION_NAME)
-            return
         inventory_gnb_list = self.ella.get_gnbs_from_inventory()
         relation_gnb_list = self._get_gnb_config_from_relations()
         for relation_gnb in relation_gnb_list:
             if relation_gnb not in inventory_gnb_list:
-                self.ella.add_gnb_to_inventory(relation_gnb)
+                self.ella.add_gnb_to_inventory(gnb=relation_gnb)
         for inventory_gnb in inventory_gnb_list:
             if inventory_gnb not in relation_gnb_list:
-                self.ella.delete_gnb_from_inventory(inventory_gnb)
+                self.ella.delete_gnb_from_inventory(gnb=inventory_gnb)
 
     def _set_n2_information(self) -> None:
         if not self._relation_created(N2_RELATION_NAME):

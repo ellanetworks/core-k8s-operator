@@ -84,5 +84,5 @@ class Ella:
         try:
             response.raise_for_status()
         except requests.HTTPError as e:
-            logger.error("Failed to remove %s from webui: %s", resource_name, e)
-        logger.info("%s removed from webui", resource_name)
+            logger.error("Failed to remove %s from ella: %s", resource_name, e)
+        logger.info("%s removed from ella", resource_name)
