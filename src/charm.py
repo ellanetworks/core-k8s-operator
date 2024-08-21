@@ -170,7 +170,7 @@ class EllaK8SCharm(CharmBase):
             return
         event.add_status(ActiveStatus())
 
-    def _configure(self, _: EventBase):  # noqa: C901
+    def _configure(self, _: EventBase):
         try:  # workaround for https://github.com/canonical/operator/issues/736
             self._charm_config: CharmConfig = CharmConfig.from_charm(charm=self)
         except CharmConfigInvalidError:
@@ -185,10 +185,26 @@ class EllaK8SCharm(CharmBase):
             logger.warning("Multus is not available")
             return
         self.on.nad_config_changed.emit()
+        self._configure_ebpf_volume()
+        self._configure_amf_service()
+        self._configure_routes()
+        if not self._database_is_available():
+            logger.warning("Database is not available")
+            return
+        changed = self._configure_config_file()
+        self._configure_pebble(restart=changed)
+        self._set_n2_information()
+        self._sync_gnbs()
+
+    def _configure_ebpf_volume(self):
         if not self._ebpf_volume.is_created():
             self._ebpf_volume.create()
+
+    def _configure_amf_service(self):
         if not self.amf_service.is_created():
             self.amf_service.create()
+
+    def _configure_routes(self):
         if not self._route_exists(
             dst="default",
             via=str(self._charm_config.n6_gateway_ip),
@@ -199,15 +215,13 @@ class EllaK8SCharm(CharmBase):
             via=str(self._charm_config.n3_gateway_ip),
         ):
             self._create_ran_route()
-        if not self._database_is_available():
-            logger.warning("Database is not available")
-            return
+
+    def _configure_config_file(self):
         desired_config_file = self._generate_config_file()
-        if config_update_required := self._is_config_update_required(desired_config_file):
+        if self._is_config_update_required(desired_config_file):
             self._push_config_file(content=desired_config_file)
-        self._configure_pebble(restart=config_update_required)
-        self._set_n2_information()
-        self._sync_gnbs()
+            return True
+        return False
 
     @property
     def _ella_endpoint(self) -> str:
