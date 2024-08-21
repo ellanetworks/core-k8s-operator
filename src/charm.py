@@ -10,7 +10,7 @@ from ipaddress import IPv4Address
 from subprocess import CalledProcessError, check_output
 from typing import List, Optional, Tuple
 
-from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires  # type: ignore[import]
+from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.kubernetes_charm_libraries.v0.multus import (
     KubernetesMultusCharmLib,
     NetworkAnnotation,
@@ -172,7 +172,7 @@ class EllaK8SCharm(CharmBase):
 
     def _configure(self, _: EventBase):  # noqa: C901
         try:  # workaround for https://github.com/canonical/operator/issues/736
-            self._charm_config: CharmConfig = CharmConfig.from_charm(charm=self)  # type: ignore[no-redef]  # noqa: E501
+            self._charm_config: CharmConfig = CharmConfig.from_charm(charm=self)
         except CharmConfigInvalidError:
             return
         if not self.unit.is_leader():
