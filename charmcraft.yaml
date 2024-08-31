@@ -5,6 +5,12 @@ title: Ella (K8s)
 summary: A private mobile network.
 
 description: A private mobile network.
+links:
+  source:
+    - https://github.com/yeastengine/ella-k8s-operator
+  issues:
+    - https://github.com/canonical/ella-k8s-operator/issues
+  documentation: https://discourse.charmhub.io/t/ella-operator-kubernetes/15386
 
 bases:
   - build-on:
