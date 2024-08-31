@@ -181,6 +181,9 @@ class EllaK8SCharm(CharmBase):
         if not self.container.can_connect():
             logger.warning("Pebble API is not ready")
             return
+        if self._missing_relations():
+            logger.warning("Missing relations")
+            return
         if not self._kubernetes_multus.multus_is_available():
             logger.warning("Multus is not available")
             return
