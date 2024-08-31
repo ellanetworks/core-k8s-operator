@@ -210,7 +210,9 @@ class AMFService:
             return "", ""
         if not service.status.loadBalancer.ingress:
             return "", ""
+        ip = service.status.loadBalancer.ingress[0].ip
+        hostname = service.status.loadBalancer.ingress[0].hostname
         return (
-            str(service.status.loadBalancer.ingress[0].ip),
-            str(service.status.loadBalancer.ingress[0].hostname),
+            str(ip) if ip else "",
+            str(hostname) if hostname else "",
         )
