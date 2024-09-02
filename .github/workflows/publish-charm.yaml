@@ -32,7 +32,7 @@ jobs:
           docker login --username gruyaume --password ${{ secrets.GHCR_TOKEN }} ghcr.io
 
       - name: Upload charm to Charmhub
-        uses: canonical/charming-actions/upload-charm@2.6.2
+        uses: canonical/charming-actions/upload-charm@2.6.3
         with:
           built-charm-path: ${{ steps.charm-path.outputs.charm_path }}
           credentials: "${{ secrets.CHARMCRAFT_AUTH }}"
