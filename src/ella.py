@@ -39,7 +39,7 @@ class Ella:
         """Get the GnodeBs from the inventory."""
         inventory_url = f"{self.url}/{GNB_CONFIG_URL}"
         gnb_dict_list = self._get_resources_from_inventory(inventory_url)
-        return [GnodeB(gnb_dict["name"], gnb_dict["tac"]) for gnb_dict in gnb_dict_list]
+        return [GnodeB(gnb_dict["name"], int(gnb_dict["tac"])) for gnb_dict in gnb_dict_list]
 
     def add_gnb_to_inventory(self, gnb: GnodeB) -> None:
         """Add a GnodeB to the inventory.
