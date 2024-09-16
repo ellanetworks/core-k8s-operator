@@ -28,7 +28,7 @@ iniconfig==2.0.0
     # via pytest
 lightkube==0.15.4
     # via -r requirements.in
-lightkube-models==1.30.0.8
+lightkube-models==1.31.1.8
     # via
     #   -r requirements.in
     #   lightkube
@@ -48,7 +48,7 @@ pydantic==2.9.1
     #   pytest-interface-tester
 pydantic-core==2.23.3
     # via pydantic
-pytest==8.3.2
+pytest==8.3.3
     # via pytest-interface-tester
 pytest-interface-tester==3.1.0
     # via -r requirements.in
