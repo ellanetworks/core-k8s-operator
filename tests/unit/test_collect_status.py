@@ -22,7 +22,7 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
             containers=[container],
         )
 
-        state_out = self.ctx.run("collect_unit_status", state_in)
+        state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)
 
         assert state_out.unit_status == WaitingStatus("waiting for Pebble API")
 
@@ -36,7 +36,7 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
 
         state_in = State(containers=[container], relations=[])
 
-        state_out = self.ctx.run("collect_unit_status", state_in)
+        state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)
 
         assert state_out.unit_status == BlockedStatus("Waiting for database relation(s)")
 
@@ -52,7 +52,7 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
             relations=[Relation(endpoint="database", interface="mongodb_client")],
         )
 
-        state_out = self.ctx.run("collect_unit_status", state_in)
+        state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)
 
         assert state_out.unit_status == WaitingStatus("Waiting for the database to be available")
 
@@ -70,7 +70,7 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
             relations=[Relation(endpoint="database", interface="mongodb_client")],
         )
 
-        state_out = self.ctx.run("collect_unit_status", state_in)
+        state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)
 
         assert state_out.unit_status == WaitingStatus("waiting for config file")
 
@@ -82,7 +82,7 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
             container = Container(
                 name="ella",
                 can_connect=True,
-                mounts={"config": Mount("/etc/ella/ella.yaml", local_file.name)},
+                mounts={"config": Mount(location="/etc/ella/ella.yaml", source=local_file.name)},
             )
 
             state_in = State(
@@ -90,6 +90,6 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
                 relations=[Relation(endpoint="database", interface="mongodb_client")],
             )
 
-            state_out = self.ctx.run("collect_unit_status", state_in)
+            state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)
 
             assert state_out.unit_status == ActiveStatus("")
