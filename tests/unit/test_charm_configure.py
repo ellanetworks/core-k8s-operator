@@ -4,7 +4,7 @@
 import tempfile
 
 from ops.pebble import Layer
-from scenario import Container, ExecOutput, Mount, Relation, State
+from scenario import Container, Exec, Mount, Relation, State
 
 from ella import GnodeB
 from tests.unit.fixtures import EllaUnitTestFixtures
@@ -18,33 +18,36 @@ class TestCharmConfigure(EllaUnitTestFixtures):
             container = Container(
                 name="ella",
                 can_connect=True,
-                mounts={"config": Mount("/etc/ella/ella.yaml", local_file.name)},
-                exec_mock={
-                    ("ip", "route", "show"): ExecOutput(
+                mounts={"config": Mount(location="/etc/ella/ella.yaml", source=local_file.name)},
+                execs={
+                    Exec(
+                        command_prefix=["ip", "route", "show"],
                         return_code=0,
                         stdout="",
                     ),
-                    (
-                        "ip",
-                        "route",
-                        "replace",
-                        "default",
-                        "via",
-                        "192.168.250.1",
-                        "metric",
-                        "110",
-                    ): ExecOutput(
+                    Exec(
+                        command_prefix=[
+                            "ip",
+                            "route",
+                            "replace",
+                            "default",
+                            "via",
+                            "192.168.250.1",
+                            "metric",
+                            "110",
+                        ],
                         return_code=0,
                         stdout="",
                     ),
-                    (
-                        "ip",
-                        "route",
-                        "replace",
-                        "192.168.251.0/24",
-                        "via",
-                        "192.168.252.1",
-                    ): ExecOutput(
+                    Exec(
+                        command_prefix=[
+                            "ip",
+                            "route",
+                            "replace",
+                            "192.168.251.0/24",
+                            "via",
+                            "192.168.252.1",
+                        ],
                         return_code=0,
                         stdout="",
                     ),
@@ -53,13 +56,10 @@ class TestCharmConfigure(EllaUnitTestFixtures):
             db_relation = Relation(endpoint="database", interface="mongodb_client")
             state_in = State(containers=[container], leader=True, relations=[db_relation])
             self.mock_db_relation_data.return_value = {
-                db_relation.relation_id: {"uris": "mongodb://localhost:27017/ella"}
+                db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
             }
 
-            self.ctx.run(
-                container.pebble_ready_event(),
-                state_in,
-            )
+            self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
             with open("tests/unit/expected_config.yaml", "r") as f:
                 assert local_file.read().decode() == f.read()
@@ -71,33 +71,36 @@ class TestCharmConfigure(EllaUnitTestFixtures):
             container = Container(
                 name="ella",
                 can_connect=True,
-                mounts={"config": Mount("/etc/ella/ella.yaml", local_file.name)},
-                exec_mock={
-                    ("ip", "route", "show"): ExecOutput(
+                mounts={"config": Mount(location="/etc/ella/ella.yaml", source=local_file.name)},
+                execs={
+                    Exec(
+                        command_prefix=["ip", "route", "show"],
                         return_code=0,
                         stdout="",
                     ),
-                    (
-                        "ip",
-                        "route",
-                        "replace",
-                        "default",
-                        "via",
-                        "192.168.250.1",
-                        "metric",
-                        "110",
-                    ): ExecOutput(
+                    Exec(
+                        command_prefix=[
+                            "ip",
+                            "route",
+                            "replace",
+                            "default",
+                            "via",
+                            "192.168.250.1",
+                            "metric",
+                            "110",
+                        ],
                         return_code=0,
                         stdout="",
                     ),
-                    (
-                        "ip",
-                        "route",
-                        "replace",
-                        "192.168.251.0/24",
-                        "via",
-                        "192.168.252.1",
-                    ): ExecOutput(
+                    Exec(
+                        command_prefix=[
+                            "ip",
+                            "route",
+                            "replace",
+                            "192.168.251.0/24",
+                            "via",
+                            "192.168.252.1",
+                        ],
                         return_code=0,
                         stdout="",
                     ),
@@ -106,15 +109,13 @@ class TestCharmConfigure(EllaUnitTestFixtures):
             db_relation = Relation(endpoint="database", interface="mongodb_client")
             state_in = State(containers=[container], leader=True, relations=[db_relation])
             self.mock_db_relation_data.return_value = {
-                db_relation.relation_id: {"uris": "mongodb://localhost:27017/ella"}
+                db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
             }
 
-            state_out = self.ctx.run(
-                container.pebble_ready_event(),
-                state_in,
-            )
+            state_out = self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
-            assert state_out.containers[0].layers["ella"] == Layer(
+            container = state_out.get_container("ella")
+            assert container.layers["ella"] == Layer(
                 {
                     "summary": "ella layer",
                     "description": "pebble config layer for ella",
@@ -150,33 +151,36 @@ class TestCharmConfigure(EllaUnitTestFixtures):
         container = Container(
             name="ella",
             can_connect=True,
-            mounts={"config": Mount("/etc/ella/ella.yaml", "/tmp/ella.yaml")},
-            exec_mock={
-                ("ip", "route", "show"): ExecOutput(
+            mounts={"config": Mount(location="/etc/ella/ella.yaml", source="/tmp/ella.yaml")},
+            execs={
+                Exec(
+                    command_prefix=["ip", "route", "show"],
                     return_code=0,
                     stdout="",
                 ),
-                (
-                    "ip",
-                    "route",
-                    "replace",
-                    "default",
-                    "via",
-                    "192.168.250.1",
-                    "metric",
-                    "110",
-                ): ExecOutput(
+                Exec(
+                    command_prefix=[
+                        "ip",
+                        "route",
+                        "replace",
+                        "default",
+                        "via",
+                        "192.168.250.1",
+                        "metric",
+                        "110",
+                    ],
                     return_code=0,
                     stdout="",
                 ),
-                (
-                    "ip",
-                    "route",
-                    "replace",
-                    "192.168.251.0/24",
-                    "via",
-                    "192.168.252.1",
-                ): ExecOutput(
+                Exec(
+                    command_prefix=[
+                        "ip",
+                        "route",
+                        "replace",
+                        "192.168.251.0/24",
+                        "via",
+                        "192.168.252.1",
+                    ],
                     return_code=0,
                     stdout="",
                 ),
@@ -187,10 +191,10 @@ class TestCharmConfigure(EllaUnitTestFixtures):
             containers=[container], leader=True, relations=[db_relation, gnb_relation]
         )
         self.mock_db_relation_data.return_value = {
-            db_relation.relation_id: {"uris": "mongodb://localhost:27017/ella"}
+            db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
         }
 
-        self.ctx.run(container.pebble_ready_event(), state_in)
+        self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
         self.mock_ella.add_gnb_to_inventory.assert_called_once_with(
             gnb=GnodeB(name="gnb1", tac=1234)
@@ -208,33 +212,36 @@ class TestCharmConfigure(EllaUnitTestFixtures):
         container = Container(
             name="ella",
             can_connect=True,
-            mounts={"config": Mount("/etc/ella/ella.yaml", "/tmp/ella.yaml")},
-            exec_mock={
-                ("ip", "route", "show"): ExecOutput(
+            mounts={"config": Mount(location="/etc/ella/ella.yaml", source="/tmp/ella.yaml")},
+            execs={
+                Exec(
+                    command_prefix=["ip", "route", "show"],
                     return_code=0,
                     stdout="",
                 ),
-                (
-                    "ip",
-                    "route",
-                    "replace",
-                    "default",
-                    "via",
-                    "192.168.250.1",
-                    "metric",
-                    "110",
-                ): ExecOutput(
+                Exec(
+                    command_prefix=[
+                        "ip",
+                        "route",
+                        "replace",
+                        "default",
+                        "via",
+                        "192.168.250.1",
+                        "metric",
+                        "110",
+                    ],
                     return_code=0,
                     stdout="",
                 ),
-                (
-                    "ip",
-                    "route",
-                    "replace",
-                    "192.168.251.0/24",
-                    "via",
-                    "192.168.252.1",
-                ): ExecOutput(
+                Exec(
+                    command_prefix=[
+                        "ip",
+                        "route",
+                        "replace",
+                        "192.168.251.0/24",
+                        "via",
+                        "192.168.252.1",
+                    ],
                     return_code=0,
                     stdout="",
                 ),
@@ -243,10 +250,10 @@ class TestCharmConfigure(EllaUnitTestFixtures):
         db_relation = Relation(endpoint="database", interface="mongodb_client")
         state_in = State(containers=[container], leader=True, relations=[db_relation])
         self.mock_db_relation_data.return_value = {
-            db_relation.relation_id: {"uris": "mongodb://localhost:27017/ella"}
+            db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
         }
 
-        self.ctx.run(container.pebble_ready_event(), state_in)
+        self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
         self.mock_ella.delete_gnb_from_inventory.assert_called_once_with(
             gnb=GnodeB(name="gnb1", tac=1234)
@@ -261,33 +268,36 @@ class TestCharmConfigure(EllaUnitTestFixtures):
         container = Container(
             name="ella",
             can_connect=True,
-            mounts={"config": Mount("/etc/ella/ella.yaml", "/tmp/ella.yaml")},
-            exec_mock={
-                ("ip", "route", "show"): ExecOutput(
+            mounts={"config": Mount(location="/etc/ella/ella.yaml", source="/tmp/ella.yaml")},
+            execs={
+                Exec(
+                    command_prefix=["ip", "route", "show"],
                     return_code=0,
                     stdout="",
                 ),
-                (
-                    "ip",
-                    "route",
-                    "replace",
-                    "default",
-                    "via",
-                    "192.168.250.1",
-                    "metric",
-                    "110",
-                ): ExecOutput(
+                Exec(
+                    command_prefix=[
+                        "ip",
+                        "route",
+                        "replace",
+                        "default",
+                        "via",
+                        "192.168.250.1",
+                        "metric",
+                        "110",
+                    ],
                     return_code=0,
                     stdout="",
                 ),
-                (
-                    "ip",
-                    "route",
-                    "replace",
-                    "192.168.251.0/24",
-                    "via",
-                    "192.168.252.1",
-                ): ExecOutput(
+                Exec(
+                    command_prefix=[
+                        "ip",
+                        "route",
+                        "replace",
+                        "192.168.251.0/24",
+                        "via",
+                        "192.168.252.1",
+                    ],
                     return_code=0,
                     stdout="",
                 ),
@@ -299,14 +309,11 @@ class TestCharmConfigure(EllaUnitTestFixtures):
             leader=True,
         )
         self.mock_db_relation_data.return_value = {
-            db_relation.relation_id: {"uris": "mongodb://localhost:27017/ella"}
+            db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
         }
         self.mock_k8s_amf_service.get_info.return_value = "1.2.3.4", "my.hostname.com"
 
-        self.ctx.run(
-            container.pebble_ready_event(),
-            state_in,
-        )
+        self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
         self.mock_n2_provides_set_n2_information.assert_called_once_with(
             amf_ip_address="1.2.3.4",
