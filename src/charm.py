@@ -16,6 +16,9 @@ from charms.kubernetes_charm_libraries.v0.multus import (
     NetworkAnnotation,
     NetworkAttachmentDefinition,
 )
+from charms.prometheus_k8s.v0.prometheus_scrape import (
+    MetricsEndpointProvider,
+)
 from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
 from charms.sdcore_gnbsim_k8s.v0.fiveg_gnb_identity import (
     GnbIdentityRequires,
@@ -31,9 +34,6 @@ from ops import (
     ModelError,
     WaitingStatus,
     main,
-)
-from charms.prometheus_k8s.v0.prometheus_scrape import (
-    MetricsEndpointProvider,
 )
 from ops.charm import CollectStatusEvent
 from ops.pebble import ConnectionError, ExecError, Layer
@@ -63,6 +63,7 @@ NGAPP_PORT = 38412
 N2_RELATION_NAME = "fiveg-n2"
 GNB_IDENTITY_RELATION_NAME = "fiveg_gnb_identity"
 PROMETHEUS_PORT = 8081
+
 
 def render_config_file(
     interfaces: List[str], n3_address: str, database_url: str, database_name: str
