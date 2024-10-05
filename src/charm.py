@@ -32,6 +32,9 @@ from ops import (
     WaitingStatus,
     main,
 )
+from charms.prometheus_k8s.v0.prometheus_scrape import (
+    MetricsEndpointProvider,
+)
 from ops.charm import CollectStatusEvent
 from ops.pebble import ConnectionError, ExecError, Layer
 
@@ -59,7 +62,7 @@ NMS_PORT = 5000
 NGAPP_PORT = 38412
 N2_RELATION_NAME = "fiveg-n2"
 GNB_IDENTITY_RELATION_NAME = "fiveg_gnb_identity"
-
+PROMETHEUS_PORT = 8081
 
 def render_config_file(
     interfaces: List[str], n3_address: str, database_url: str, database_name: str
@@ -127,6 +130,14 @@ class EllaK8SCharm(CharmBase):
             name=f"{self.app.name}-external",
             app_name=self.app.name,
             ngapp_port=NGAPP_PORT,
+        )
+        self._metrics_endpoint = MetricsEndpointProvider(
+            self,
+            jobs=[
+                {
+                    "static_configs": [{"targets": [f"*:{PROMETHEUS_PORT}"]}],
+                }
+            ],
         )
         self.ella = Ella(url=self._ella_endpoint)
         self.unit.set_ports(NMS_PORT)
