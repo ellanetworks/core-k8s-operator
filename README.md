@@ -104,7 +104,7 @@ juju deploy grafana-agent-k8s
 Integrate Ella K8s with Grafana Agent:
 
 ```bash
-juju integrate grafana-agent-k8s ella-k8s:metrics
+juju integrate grafana-agent-k8s ella-k8s:metrics-endpoint
 ```
 
 Consume the COS offers:
