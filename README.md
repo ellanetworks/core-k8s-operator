@@ -122,3 +122,17 @@ juju integrate prometheus:receive-remote-write grafana-agent-k8s:send-remote-wri
 juju integrate loki:logging grafana-agent-k8s:logging-consumer
 juju integrate grafana:grafana-dashboard grafana-agent-k8s:grafana-dashboards-provider
 ```
+
+Switch to the cos model:
+
+```bash
+juju switch cos
+```
+
+Retrieve the Grafana admin password:
+
+```bash
+juju run grafana/leader get-admin-password
+```
+
+Log in Grafana, and search for Ella related metrics.
