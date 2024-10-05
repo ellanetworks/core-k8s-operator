@@ -2,5 +2,5 @@ db:
   url: mongodb://localhost:27017/ella
   name: ella
 upf:
-  interfaces: ['n3', 'n6']
+  interfaces: ['access', 'core']
   n3-address: 192.168.252.3

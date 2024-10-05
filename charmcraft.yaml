@@ -48,7 +48,7 @@ config:
   options:
     interfaces:
       type: string
-      default: "[n3,n6]"
+      default: "[access,core]"
       description: List of network interfaces handling N3 (GTP) & N6 (SGi) traffic. Ella attaches XDP hook to every interface in this list.
     logging-level:
       type: string
@@ -58,19 +58,19 @@ config:
       type: string
       default: 192.168.251.0/24
       description: gNodeB subnet.
-    n6-ip:
+    core-ip:
       type: string
       default: 192.168.250.3
       description: IP address used by the Ella's Core interface.
-    n6-gateway-ip:
+    core-gateway-ip:
       type: string
       default: 192.168.250.1
       description: Gateway IP address to the Core Network.
-    n3-ip:
+    access-ip:
       type: string
       default: 192.168.252.3
       description: IP address used by the Ella's Access interface.
-    n3-gateway-ip:
+    access-gateway-ip:
       type: string
       default: 192.168.252.1
       description: Gateway IP address to the Access Network.

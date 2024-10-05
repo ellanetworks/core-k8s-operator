@@ -47,12 +47,12 @@ logger = logging.getLogger(__name__)
 CONFIG_TEMPLATE_DIR_PATH = "src/templates/"
 CONFIG_FILE_PATH = "/etc/ella/ella.yaml"
 CONFIG_TEMPLATE_NAME = "ella.yaml.j2"
-N3_INTERFACE_BRIDGE_NAME = "access-br"
-N6_INTERFACE_BRIDGE_NAME = "core-br"
-N3_NETWORK_ATTACHMENT_DEFINITION_NAME = "n3-net"
-N6_NETWORK_ATTACHMENT_DEFINITION_NAME = "n6-net"
-N3_INTERFACE_NAME = "n3"
-N6_INTERFACE_NAME = "n6"
+ACCESS_INTERFACE_BRIDGE_NAME = "access-br"
+CORE_INTERFACE_BRIDGE_NAME = "core-br"
+ACCESS_NETWORK_ATTACHMENT_DEFINITION_NAME = "access-net"
+CORE_NETWORK_ATTACHMENT_DEFINITION_NAME = "core-net"
+ACCESS_INTERFACE_NAME = "access"
+CORE_INTERFACE_NAME = "core"
 DATABASE_RELATION_NAME = "database"
 DATABASE_NAME = "ella"
 NMS_PORT = 5000
@@ -62,7 +62,7 @@ GNB_IDENTITY_RELATION_NAME = "fiveg_gnb_identity"
 
 
 def render_config_file(
-    interfaces: List[str], n3_address: str, database_url: str, database_name: str
+    interfaces: List[str], access_address: str, database_url: str, database_name: str
 ) -> str:
     """Render the config file.
 
@@ -73,7 +73,7 @@ def render_config_file(
     template = jinja2_environment.get_template(CONFIG_TEMPLATE_NAME)
     content = template.render(
         interfaces=interfaces,
-        n3_address=n3_address,
+        access_address=access_address,
         database_url=database_url,
         database_name=database_name,
     )
@@ -210,12 +210,12 @@ class EllaK8SCharm(CharmBase):
     def _configure_routes(self):
         if not self._route_exists(
             dst="default",
-            via=str(self._charm_config.n6_gateway_ip),
+            via=str(self._charm_config.core_gateway_ip),
         ):
             self._create_default_route()
         if not self._route_exists(
             dst=str(self._charm_config.gnb_subnet),
-            via=str(self._charm_config.n3_gateway_ip),
+            via=str(self._charm_config.access_gateway_ip),
         ):
             self._create_ran_route()
 
@@ -308,7 +308,7 @@ class EllaK8SCharm(CharmBase):
     def _create_default_route(self) -> None:
         """Create ip route towards core network."""
         _, stderr = self._exec_command_in_workload(
-            command=f"ip route replace default via {self._charm_config.n6_gateway_ip} metric 110"
+            command=f"ip route replace default via {self._charm_config.core_gateway_ip} metric 110"
         )
         if stderr:
             logger.error("Failed to create default route (ExecError)")
@@ -318,7 +318,7 @@ class EllaK8SCharm(CharmBase):
     def _create_ran_route(self) -> None:
         """Create ip route towards gnb-subnet."""
         stdout, stderr = self._exec_command_in_workload(
-            command=f"ip route replace {self._charm_config.gnb_subnet} via {self._charm_config.n3_gateway_ip}"
+            command=f"ip route replace {self._charm_config.gnb_subnet} via {self._charm_config.access_gateway_ip}"
         )
         if stderr:
             logger.error("Failed to create route to gnb-subnet (ExecError)")
@@ -363,56 +363,56 @@ class EllaK8SCharm(CharmBase):
         self.container.replan()
 
     def _generate_network_annotations(self) -> List[NetworkAnnotation]:
-        n3_network_annotation = NetworkAnnotation(
-            name=N3_NETWORK_ATTACHMENT_DEFINITION_NAME,
-            interface=N3_INTERFACE_NAME,
+        access_network_annotation = NetworkAnnotation(
+            name=ACCESS_NETWORK_ATTACHMENT_DEFINITION_NAME,
+            interface=ACCESS_INTERFACE_NAME,
         )
-        n6_network_annotation = NetworkAnnotation(
-            name=N6_NETWORK_ATTACHMENT_DEFINITION_NAME,
-            interface=N6_INTERFACE_NAME,
+        core_network_annotation = NetworkAnnotation(
+            name=CORE_NETWORK_ATTACHMENT_DEFINITION_NAME,
+            interface=CORE_INTERFACE_NAME,
         )
-        return [n3_network_annotation, n6_network_annotation]
+        return [access_network_annotation, core_network_annotation]
 
     def _network_attachment_definitions_from_config(self) -> List[NetworkAttachmentDefinition]:
-        n3_nad_config = {
+        access_nad_config = {
             "cniVersion": "0.3.1",
             "ipam": {
                 "type": "static",
                 "addresses": [
-                    {"address": f"{self._charm_config.n3_ip}/24"},
+                    {"address": f"{self._charm_config.access_ip}/24"},
                 ],
             },
             "capabilities": {"mac": True},
             "type": "bridge",
-            "bridge": N3_INTERFACE_BRIDGE_NAME,
+            "bridge": ACCESS_INTERFACE_BRIDGE_NAME,
         }
-        n6_nad_config = {
+        core_nad_config = {
             "cniVersion": "0.3.1",
             "ipam": {
                 "type": "static",
                 "addresses": [
-                    {"address": f"{self._charm_config.n6_ip}/24"},
+                    {"address": f"{self._charm_config.core_ip}/24"},
                 ],
             },
             "capabilities": {"mac": True},
             "type": "bridge",
-            "bridge": N6_INTERFACE_BRIDGE_NAME,
+            "bridge": CORE_INTERFACE_BRIDGE_NAME,
         }
 
-        n3_nad = NetworkAttachmentDefinition(
-            metadata=ObjectMeta(name=(N3_NETWORK_ATTACHMENT_DEFINITION_NAME)),
-            spec={"config": json.dumps(n3_nad_config)},
+        access_nad = NetworkAttachmentDefinition(
+            metadata=ObjectMeta(name=(ACCESS_NETWORK_ATTACHMENT_DEFINITION_NAME)),
+            spec={"config": json.dumps(access_nad_config)},
         )
-        n6_nad = NetworkAttachmentDefinition(
-            metadata=ObjectMeta(name=(N6_NETWORK_ATTACHMENT_DEFINITION_NAME)),
-            spec={"config": json.dumps(n6_nad_config)},
+        core_nad = NetworkAttachmentDefinition(
+            metadata=ObjectMeta(name=(CORE_NETWORK_ATTACHMENT_DEFINITION_NAME)),
+            spec={"config": json.dumps(core_nad_config)},
         )
-        return [n3_nad, n6_nad]
+        return [access_nad, core_nad]
 
     def _generate_config_file(self) -> str:
         return render_config_file(
             interfaces=self._charm_config.interfaces,
-            n3_address=str(self._charm_config.n3_ip),
+            access_address=str(self._charm_config.access_ip),
             database_url=self._get_database_info()["uris"].split(",")[0],
             database_name=DATABASE_NAME,
         )

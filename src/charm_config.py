@@ -40,13 +40,13 @@ class EllaConfig(BaseModel):
 
     model_config = ConfigDict(alias_generator=to_kebab, use_enum_values=True)
 
-    interfaces: List[str] = ["n3", "n6"]
+    interfaces: List[str] = ["access", "core"]
     logging_level: str = "info"
     gnb_subnet: IPv4Network = IPv4Network("192.168.251.0/24")
-    n3_ip: IPv4Address = IPv4Address("192.168.252.3")
-    n3_gateway_ip: IPv4Address = IPv4Address("192.168.252.1")
-    n6_ip: IPv4Address = IPv4Address("192.168.250.3")
-    n6_gateway_ip: IPv4Address = IPv4Address("192.168.250.1")
+    access_ip: IPv4Address = IPv4Address("192.168.252.3")
+    access_gateway_ip: IPv4Address = IPv4Address("192.168.252.1")
+    core_ip: IPv4Address = IPv4Address("192.168.250.3")
+    core_gateway_ip: IPv4Address = IPv4Address("192.168.250.1")
 
 
 @dataclasses.dataclass
@@ -56,10 +56,10 @@ class CharmConfig:
     interfaces: List[str]
     logging_level: str
     gnb_subnet: IPv4Network
-    n3_ip: IPv4Address
-    n3_gateway_ip: IPv4Address
-    n6_ip: IPv4Address
-    n6_gateway_ip: IPv4Address
+    access_ip: IPv4Address
+    access_gateway_ip: IPv4Address
+    core_ip: IPv4Address
+    core_gateway_ip: IPv4Address
 
     def __init__(self, *, ella_config: EllaConfig):
         """Initialize a new instance of the CharmConfig class.
@@ -70,10 +70,10 @@ class CharmConfig:
         self.interfaces = ella_config.interfaces
         self.logging_level = ella_config.logging_level
         self.gnb_subnet = ella_config.gnb_subnet
-        self.n3_ip = ella_config.n3_ip
-        self.n3_gateway_ip = ella_config.n3_gateway_ip
-        self.n6_ip = ella_config.n6_ip
-        self.n6_gateway_ip = ella_config.n6_gateway_ip
+        self.access_ip = ella_config.access_ip
+        self.access_gateway_ip = ella_config.access_gateway_ip
+        self.core_ip = ella_config.core_ip
+        self.core_gateway_ip = ella_config.core_gateway_ip
 
     @classmethod
     def from_charm(
@@ -84,7 +84,7 @@ class CharmConfig:
         try:
             # ignoring because mypy fails with:
             # "has incompatible type "**dict[str, str]"; expected ...""
-            interfaces = str(charm.config.get("interfaces", "[n3,n6]"))
+            interfaces = str(charm.config.get("interfaces", "[core,access]"))
             return cls(
                 ella_config=EllaConfig(
                     interfaces=interfaces.replace(" ", "")
@@ -93,10 +93,14 @@ class CharmConfig:
                     .split(","),
                     logging_level=str(charm.config.get("logging_level", "info")),
                     gnb_subnet=IPv4Network(charm.config.get("gnb_subnet", "192.168.251.0/24")),
-                    n3_ip=IPv4Address(charm.config.get("n3_ip", "192.168.252.3")),
-                    n3_gateway_ip=IPv4Address(charm.config.get("n3_gateway_ip", "192.168.252.1")),
-                    n6_ip=IPv4Address(charm.config.get("n6_ip", "192.168.250.3")),
-                    n6_gateway_ip=IPv4Address(charm.config.get("n6_gateway_ip", "192.168.250.1")),
+                    access_ip=IPv4Address(charm.config.get("access_ip", "192.168.252.3")),
+                    access_gateway_ip=IPv4Address(
+                        charm.config.get("access_gateway_ip", "192.168.252.1")
+                    ),
+                    core_ip=IPv4Address(charm.config.get("core_ip", "192.168.250.3")),
+                    core_gateway_ip=IPv4Address(
+                        charm.config.get("core_gateway_ip", "192.168.250.1")
+                    ),
                 )
             )
         except ValidationError as exc:
