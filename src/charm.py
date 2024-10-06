@@ -16,6 +16,9 @@ from charms.kubernetes_charm_libraries.v0.multus import (
     NetworkAnnotation,
     NetworkAttachmentDefinition,
 )
+from charms.prometheus_k8s.v0.prometheus_scrape import (
+    MetricsEndpointProvider,
+)
 from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
 from charms.sdcore_gnbsim_k8s.v0.fiveg_gnb_identity import (
     GnbIdentityRequires,
@@ -27,13 +30,12 @@ from ops import (
     BlockedStatus,
     CharmBase,
     EventBase,
-    EventSource,
     Framework,
     ModelError,
     WaitingStatus,
     main,
 )
-from ops.charm import CharmEvents, CollectStatusEvent
+from ops.charm import CollectStatusEvent
 from ops.pebble import ConnectionError, ExecError, Layer
 
 from charm_config import CharmConfig, CharmConfigInvalidError
@@ -60,6 +62,7 @@ NMS_PORT = 5000
 NGAPP_PORT = 38412
 N2_RELATION_NAME = "fiveg-n2"
 GNB_IDENTITY_RELATION_NAME = "fiveg_gnb_identity"
+PROMETHEUS_PORT = 8081
 
 
 def render_config_file(
@@ -90,20 +93,8 @@ def get_pod_ip() -> Optional[str]:
         return None
 
 
-class NadConfigChangedEvent(EventBase):
-    """Event triggered when an existing network attachment definition is changed."""
-
-
-class EllaCharmEvents(CharmEvents):
-    """Kubernetes Ella charm events."""
-
-    nad_config_changed = EventSource(NadConfigChangedEvent)
-
-
 class EllaK8SCharm(CharmBase):
     """Charm the service."""
-
-    on = EllaCharmEvents()  # type: ignore[reportAssignmentType]
 
     def __init__(self, framework: Framework):
         super().__init__(framework)
@@ -120,12 +111,13 @@ class EllaK8SCharm(CharmBase):
         self.n2_provider = N2Provides(self, N2_RELATION_NAME)
         self._gnb_identity = GnbIdentityRequires(self, GNB_IDENTITY_RELATION_NAME)
         self._kubernetes_multus = KubernetesMultusCharmLib(
-            charm=self,
+            namespace=self.model.name,
+            statefulset_name=self.model.app.name,
             container_name=self._container_name,
+            pod_name=self._pod_name,
             cap_net_admin=True,
-            network_annotations_func=self._generate_network_annotations,
-            network_attachment_definitions_func=self._network_attachment_definitions_from_config,
-            refresh_event=self.on.nad_config_changed,
+            network_annotations=self._generate_network_annotations(),
+            network_attachment_definitions=self._network_attachment_definitions_from_config(),
             privileged=True,
         )
         self._ebpf_volume = EBPFVolume(
@@ -140,6 +132,14 @@ class EllaK8SCharm(CharmBase):
             app_name=self.app.name,
             ngapp_port=NGAPP_PORT,
         )
+        self._metrics_endpoint = MetricsEndpointProvider(
+            self,
+            jobs=[
+                {
+                    "static_configs": [{"targets": [f"*:{PROMETHEUS_PORT}"]}],
+                }
+            ],
+        )
         self.ella = Ella(url=self._ella_endpoint)
         self.unit.set_ports(NMS_PORT)
         self.framework.observe(self._database.on.database_created, self._configure)
@@ -149,6 +149,7 @@ class EllaK8SCharm(CharmBase):
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.fiveg_n2_relation_joined, self._configure)
         self.framework.observe(self._gnb_identity.on.fiveg_gnb_identity_available, self._configure)
+        self.framework.observe(self.on.remove, self._on_remove)
 
     def _on_collect_status(self, event: CollectStatusEvent):
         """Handle the collect status event."""
@@ -160,6 +161,14 @@ class EllaK8SCharm(CharmBase):
                 BlockedStatus(f"Waiting for {', '.join(missing_relations)} relation(s)")
             )
             logger.info("Waiting for %s  relation(s)", ", ".join(missing_relations))
+            return
+        if not self._kubernetes_multus.multus_is_available():
+            event.add_status(BlockedStatus("Multus is not installed or enabled"))
+            logger.info("Multus is not installed or enabled")
+            return
+        if not self._kubernetes_multus.is_ready():
+            event.add_status(WaitingStatus("Waiting for Multus to be ready"))
+            logger.info("Waiting for Multus to be ready")
             return
         if not self._database_is_available():
             event.add_status(WaitingStatus("Waiting for the database to be available"))
@@ -187,10 +196,11 @@ class EllaK8SCharm(CharmBase):
         if not self._kubernetes_multus.multus_is_available():
             logger.warning("Multus is not available")
             return
-        self.on.nad_config_changed.emit()
+        self._kubernetes_multus.configure()
         self._configure_ebpf_volume()
         self._configure_amf_service()
         self._configure_routes()
+        self._enable_ip_forwarding()
         if not self._database_is_available():
             logger.warning("Database is not available")
             return
@@ -198,6 +208,9 @@ class EllaK8SCharm(CharmBase):
         self._configure_pebble(restart=changed)
         self._set_n2_information()
         self._sync_gnbs()
+
+    def _on_remove(self, _: EventBase):
+        self._kubernetes_multus.remove()
 
     def _configure_ebpf_volume(self):
         if not self._ebpf_volume.is_created():
@@ -218,6 +231,13 @@ class EllaK8SCharm(CharmBase):
             via=str(self._charm_config.n3_gateway_ip),
         ):
             self._create_ran_route()
+
+    def _enable_ip_forwarding(self):
+        _, stderr = self._exec_command_in_workload(command="sysctl -w net.ipv4.ip_forward=1")
+        if stderr:
+            logger.error("Failed to enable ip forwarding: %s", stderr)
+            return
+        logger.info("IP forwarding enabled")
 
     def _configure_config_file(self):
         desired_config_file = self._generate_config_file()
@@ -461,6 +481,15 @@ class EllaK8SCharm(CharmBase):
                 },
             }
         )
+
+    @property
+    def _pod_name(self) -> str:
+        """Name of the unit's pod.
+
+        Returns:
+            str: A string containing the name of the current unit's pod.
+        """
+        return "-".join(self.model.unit.name.rsplit("/", 1))
 
 
 if __name__ == "__main__":  # pragma: nocover
