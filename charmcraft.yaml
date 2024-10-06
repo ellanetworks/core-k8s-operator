@@ -84,3 +84,5 @@ requires:
 provides:
   fiveg-n2:
     interface: fiveg_n2
+  metrics-endpoint:
+    interface: prometheus_scrape

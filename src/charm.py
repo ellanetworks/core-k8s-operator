@@ -16,6 +16,9 @@ from charms.kubernetes_charm_libraries.v0.multus import (
     NetworkAnnotation,
     NetworkAttachmentDefinition,
 )
+from charms.prometheus_k8s.v0.prometheus_scrape import (
+    MetricsEndpointProvider,
+)
 from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
 from charms.sdcore_gnbsim_k8s.v0.fiveg_gnb_identity import (
     GnbIdentityRequires,
@@ -59,6 +62,7 @@ NMS_PORT = 5000
 NGAPP_PORT = 38412
 N2_RELATION_NAME = "fiveg-n2"
 GNB_IDENTITY_RELATION_NAME = "fiveg_gnb_identity"
+PROMETHEUS_PORT = 8081
 
 
 def render_config_file(
@@ -128,6 +132,14 @@ class EllaK8SCharm(CharmBase):
             app_name=self.app.name,
             ngapp_port=NGAPP_PORT,
         )
+        self._metrics_endpoint = MetricsEndpointProvider(
+            self,
+            jobs=[
+                {
+                    "static_configs": [{"targets": [f"*:{PROMETHEUS_PORT}"]}],
+                }
+            ],
+        )
         self.ella = Ella(url=self._ella_endpoint)
         self.unit.set_ports(NMS_PORT)
         self.framework.observe(self._database.on.database_created, self._configure)
@@ -188,6 +200,7 @@ class EllaK8SCharm(CharmBase):
         self._configure_ebpf_volume()
         self._configure_amf_service()
         self._configure_routes()
+        self._enable_ip_forwarding()
         if not self._database_is_available():
             logger.warning("Database is not available")
             return
@@ -218,6 +231,13 @@ class EllaK8SCharm(CharmBase):
             via=str(self._charm_config.n3_gateway_ip),
         ):
             self._create_ran_route()
+
+    def _enable_ip_forwarding(self):
+        _, stderr = self._exec_command_in_workload(command="sysctl -w net.ipv4.ip_forward=1")
+        if stderr:
+            logger.error("Failed to enable ip forwarding: %s", stderr)
+            return
+        logger.info("IP forwarding enabled")
 
     def _configure_config_file(self):
         desired_config_file = self._generate_config_file()
