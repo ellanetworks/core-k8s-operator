@@ -20,6 +20,8 @@ APP_NAME = METADATA["name"]
 DB_CHARM_NAME = "mongodb-k8s"
 GNBSIM_CHARM_NAME = "sdcore-gnbsim-k8s"
 GNBSIM_CHANNEL = "1.5/edge"
+ROUTER_CHARM_NAME = "sdcore-router-k8s"
+ROUTER_CHANNEL = "1.5/edge"
 DB_CHARM_CHANNEL = "6/beta"
 TEST_IMSI = "208930100007487"
 TEST_NETWORK_SLICE_NAME = "default"
@@ -62,6 +64,9 @@ async def test_build_and_deploy(ops_test: OpsTest, request):
 
     await ops_test.model.deploy(
         entity_url=charm_path, resources=resources, application_name=APP_NAME
+    )
+    await ops_test.model.deploy(
+        entity_url=ROUTER_CHARM_NAME, application_name=ROUTER_CHARM_NAME, channel=ROUTER_CHANNEL
     )
     await ops_test.model.deploy(
         entity_url=DB_CHARM_NAME,
