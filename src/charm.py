@@ -200,6 +200,7 @@ class EllaK8SCharm(CharmBase):
         self._configure_ebpf_volume()
         self._configure_amf_service()
         self._configure_routes()
+        self._enable_ip_forwarding()
         if not self._database_is_available():
             logger.warning("Database is not available")
             return
@@ -230,6 +231,13 @@ class EllaK8SCharm(CharmBase):
             via=str(self._charm_config.n3_gateway_ip),
         ):
             self._create_ran_route()
+
+    def _enable_ip_forwarding(self):
+        _, stderr = self._exec_command_in_workload(command="sysctl -w net.ipv4.ip_forward=1")
+        if stderr:
+            logger.error("Failed to enable ip forwarding: %s", stderr)
+            return
+        logger.info("IP forwarding enabled")
 
     def _configure_config_file(self):
         desired_config_file = self._generate_config_file()
