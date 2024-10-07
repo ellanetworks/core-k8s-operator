@@ -93,7 +93,7 @@ class Ella:
             logger.info("Raw data: %s", data)
             if data:
                 gnb_name = data[0]["name"]
-                gnb_tac = data[0]["tac"]
+                gnb_tac = int(data[0]["tac"])
                 logger.info(f"Found gNB {gnb_name} with TAC {gnb_tac}.")
                 return gnb_name, gnb_tac
             time.sleep(10)
