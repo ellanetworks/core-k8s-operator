@@ -51,8 +51,29 @@ def configure_ella(ops_test: OpsTest):
     ella_client.create_network_slice(
         TEST_NETWORK_SLICE_NAME, [TEST_DEVICE_GROUP_NAME], gnb_name, gnb_tac
     )
-    # 5 seconds for the config to propagate
-    time.sleep(5)
+
+
+def wait_for_successful_simulation(ops_test: OpsTest, timeout: int = 300):
+    """Wait for successful simulation.
+
+    Args:
+        ops_test (OpsTest): The OpsTest instance
+        timeout (int, optional): Timeout in seconds. Defaults to 300.
+    """
+    assert ops_test.model
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        action_output = juju_run_action(
+            model_name=ops_test.model.name,
+            application_name=GNBSIM_CHARM_NAME,
+            unit_number=0,
+            action_name="start-simulation",
+            timeout=6 * 60,
+        )
+        if action_output["success"] == "true":
+            return
+        time.sleep(3)
+    raise TimeoutError("Timeout while waiting for successful simulation.")
 
 
 @pytest.mark.abort_on_fail
@@ -111,12 +132,4 @@ async def test_build_and_deploy(ops_test: OpsTest, request):
 async def test_given_ella_and_gnbsim_deployed_when_start_simulation_then_simulation_success_status_is_true(  # noqa: E501
     ops_test: OpsTest, configure_ella
 ):
-    assert ops_test.model
-    action_output = juju_run_action(
-        model_name=ops_test.model.name,
-        application_name=GNBSIM_CHARM_NAME,
-        unit_number=0,
-        action_name="start-simulation",
-        timeout=6 * 60,
-    )
-    assert action_output["success"] == "true"
+    wait_for_successful_simulation(ops_test)
