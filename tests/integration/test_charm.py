@@ -28,8 +28,6 @@ TEST_NETWORK_SLICE_NAME = "default"
 TEST_DEVICE_GROUP_NAME = "default-default"
 
 
-@pytest.fixture(scope="module")
-@pytest.mark.abort_on_fail
 def configure_ella(ops_test: OpsTest):
     """Configure Ella.
 
@@ -72,7 +70,7 @@ def wait_for_successful_simulation(ops_test: OpsTest, timeout: int = 300):
         )
         if action_output["success"] == "true":
             return
-        time.sleep(3)
+        time.sleep(5)
     raise TimeoutError("Timeout while waiting for successful simulation.")
 
 
@@ -130,6 +128,8 @@ async def test_build_and_deploy(ops_test: OpsTest, request):
 
 @pytest.mark.abort_on_fail
 async def test_given_ella_and_gnbsim_deployed_when_start_simulation_then_simulation_success_status_is_true(  # noqa: E501
-    ops_test: OpsTest, configure_ella
+    ops_test: OpsTest,
 ):
+    configure_ella(ops_test)
+    time.sleep(10)
     wait_for_successful_simulation(ops_test)
