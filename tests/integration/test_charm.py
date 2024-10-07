@@ -98,17 +98,11 @@ async def test_given_ella_and_gnbsim_deployed_when_start_simulation_then_simulat
     ops_test: OpsTest, configure_ella
 ):
     assert ops_test.model
-    for _ in range(5):
-        action_output = juju_run_action(
-            model_name=ops_test.model.name,
-            application_name=GNBSIM_CHARM_NAME,
-            unit_number=0,
-            action_name="start-simulation",
-            timeout=6 * 60,
-        )
-        try:
-            assert action_output["success"] == "true"
-            return
-        except AssertionError:
-            continue
-    assert False
+    action_output = juju_run_action(
+        model_name=ops_test.model.name,
+        application_name=GNBSIM_CHARM_NAME,
+        unit_number=0,
+        action_name="start-simulation",
+        timeout=6 * 60,
+    )
+    assert action_output["success"] == "true"

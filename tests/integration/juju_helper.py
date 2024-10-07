@@ -115,6 +115,7 @@ def juju_run_action(
             cmd_out = check_output(
                 ["juju", "run", unit_name, action_name, f"--wait={timeout}s", "--format=json"]
             ).decode()
+            logger.info("Raw action output: %s", cmd_out)
             return json.loads(cmd_out)[unit_name]["results"]
         except (CalledProcessError, KeyError) as e:
             raise JujuError(f"Failed to run {action_name} action on {unit_name}!") from e
