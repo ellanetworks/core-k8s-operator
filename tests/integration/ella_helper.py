@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 SUBSCRIBER_CONFIG = {
     "UeId": "PLACEHOLDER",
-    "plmnId": "20801",
+    "plmnId": "00101",
     "opc": "981d464c7c52eb6e5036234984ad0bcf",
     "key": "5122250214c33e723a5dd523fc145fc0",
     "sequenceNumber": "16f3b3f70fc2",
