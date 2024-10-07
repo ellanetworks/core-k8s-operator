@@ -63,10 +63,16 @@ async def test_build_and_deploy(ops_test: OpsTest, request):
     resources = {"ella-image": METADATA["resources"]["ella-image"]["upstream-source"]}
 
     await ops_test.model.deploy(
-        entity_url=charm_path, resources=resources, application_name=APP_NAME
+        entity_url=charm_path,
+        resources=resources,
+        application_name=APP_NAME,
+        trust=True,
     )
     await ops_test.model.deploy(
-        entity_url=ROUTER_CHARM_NAME, application_name=ROUTER_CHARM_NAME, channel=ROUTER_CHANNEL
+        entity_url=ROUTER_CHARM_NAME,
+        application_name=ROUTER_CHARM_NAME,
+        channel=ROUTER_CHANNEL,
+        trust=True,
     )
     await ops_test.model.deploy(
         entity_url=DB_CHARM_NAME,
@@ -77,6 +83,7 @@ async def test_build_and_deploy(ops_test: OpsTest, request):
         entity_url=GNBSIM_CHARM_NAME,
         application_name=GNBSIM_CHARM_NAME,
         channel=GNBSIM_CHANNEL,
+        trust=True,
     )
 
     await ops_test.model.integrate(
@@ -90,7 +97,11 @@ async def test_build_and_deploy(ops_test: OpsTest, request):
         relation2=f"{GNBSIM_CHARM_NAME}:fiveg_gnb_identity",
     )
 
-    await ops_test.model.wait_for_idle(apps=[APP_NAME], status="active", timeout=1000)
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME, GNBSIM_CHARM_NAME, DB_CHARM_NAME, ROUTER_CHARM_NAME],
+        status="active",
+        timeout=1000,
+    )
 
 
 @pytest.mark.abort_on_fail
