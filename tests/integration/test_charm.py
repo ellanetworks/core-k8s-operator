@@ -23,7 +23,7 @@ GNBSIM_CHANNEL = "1.5/edge"
 ROUTER_CHARM_NAME = "sdcore-router-k8s"
 ROUTER_CHANNEL = "1.5/edge"
 DB_CHARM_CHANNEL = "6/beta"
-TEST_IMSI = "208930100007487"
+TEST_IMSI = "001010100007487"
 TEST_NETWORK_SLICE_NAME = "default"
 TEST_DEVICE_GROUP_NAME = "default-default"
 
@@ -45,11 +45,12 @@ def configure_ella(ops_test: OpsTest):
         unit_number=0,
     )
     ella_client = Ella(url=f"http://{ella_ip_address}:5000")
+    gnb_name, gnb_tac = ella_client.wait_for_gnb()
     ella_client.create_subscriber(TEST_IMSI)
     ella_client.create_device_group(TEST_DEVICE_GROUP_NAME, [TEST_IMSI])
-    ella_client.create_network_slice(TEST_NETWORK_SLICE_NAME, [TEST_DEVICE_GROUP_NAME])
+    ella_client.create_network_slice(TEST_NETWORK_SLICE_NAME, [TEST_DEVICE_GROUP_NAME], gnb_name, gnb_tac)
     # 5 seconds for the config to propagate
-    time.sleep(5)
+    time.sleep(9999999)
 
 
 @pytest.mark.abort_on_fail

@@ -46,14 +46,14 @@ Creare a Network Slice
 
 Click on the `Network Slices` tab and click on the `Create` button. Create a network slice with the following parameters:
 - Name: `default`
-- MCC: `208`
-- MNC: `94`
+- MCC: `001`
+- MNC: `01`
 - gNodeB: `dev-gnbsim-sdcore-gnbsim-k8s (tac: 1)`
 
 Create a Subscriber
 
 Click on the `Subscribers` tab and click on the `Create` button. Create a subscriber with the following parameters:
-- IMSI: `208930100007487`
+- IMSI: `001010100007487`
 - OPC: `981d464c7c52eb6e5036234984ad0bcf`
 - Key: `5122250214c33e723a5dd523fc145fc0`
 - Sequence Number: `16f3b3f70fc2`

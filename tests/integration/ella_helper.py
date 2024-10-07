@@ -23,7 +23,7 @@ DEVICE_GROUP_CONFIG = {
     "ip-domain-name": "pool1",
     "ip-domain-expanded": {
         "dnn": "internet",
-        "ue-ip-pool": "172.250.1.0/16",
+        "ue-ip-pool": "172.250.0.0/16",
         "dns-primary": "8.8.8.8",
         "mtu": 1460,
         "ue-dnn-qos": {
@@ -35,13 +35,12 @@ DEVICE_GROUP_CONFIG = {
     },
 }
 NETWORK_SLICE_CONFIG = {
-    "slice-id": {"sst": "1", "sd": "010203"},
+    "slice-id": {"sst": "1", "sd": "102030"},
     "site-device-group": [],
     "site-info": {
         "site-name": "demo",
-        "plmn": {"mcc": "208", "mnc": "93"},
-        "gNodeBs": [{"name": "demo-gnb1", "tac": 1}],
-        "upf": {"upf-name": "upf-external", "upf-port": "8805"},
+        "plmn": {"mcc": "001", "mnc": "01"},
+        "upf": {"upf-name": "0.0.0.0", "upf-port": "8806"},
     },
 }
 
@@ -78,17 +77,27 @@ class Ella:
         url = f"{self.url}/config/v1/device-group/{device_group_name}"
         response = requests.post(url, json=DEVICE_GROUP_CONFIG)
         response.raise_for_status()
-        now = time.time()
-        timeout = 5
-        while time.time() - now <= timeout:
-            if requests.get(url).json():
-                logger.info(f"Created device group {device_group_name}.")
-                return
-            else:
-                time.sleep(1)
-        raise TimeoutError("Timed out creating device group.")
+        logger.info(f"Created device group {device_group_name}.")
+    
+    def wait_for_gnb(self, timeout: int = 300) -> tuple:
+        """Wait for the gNB to be ready.
+        
+        Args:
+            timeout (int): Timeout in seconds
+        """
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            response = requests.get(f"{self.url}/config/v1/inventory/gnb")
+            response.raise_for_status()
+            data = response.json()
+            if data:
+                gnb_name = data[0]["name"]
+                gnb_tac = data[0]["tac"]
+                logger.info(f"Found gNB {gnb_name} with TAC {gnb_tac}.")
+                return gnb_name, gnb_tac
+            time.sleep(10)
 
-    def create_network_slice(self, network_slice_name: str, device_groups: list) -> None:
+    def create_network_slice(self, network_slice_name: str, device_groups: list, gnb_name: str, gnb_tac: int) -> None:
         """Create a network slice.
 
         Args:
@@ -96,15 +105,8 @@ class Ella:
             device_groups (list): List of device groups to be included in the network slice
         """
         NETWORK_SLICE_CONFIG["site-device-group"] = device_groups
+        NETWORK_SLICE_CONFIG["site-info"]["gNodeBs"] = [{"name": gnb_name, "tac": gnb_tac}]
         url = f"{self.url}/config/v1/network-slice/{network_slice_name}"
         response = requests.post(url, json=NETWORK_SLICE_CONFIG)
         response.raise_for_status()
-        now = time.time()
-        timeout = 5
-        while time.time() - now <= timeout:
-            if requests.get(url).json():
-                logger.info(f"Created network slice {network_slice_name}.")
-                return
-            else:
-                time.sleep(1)
-        raise TimeoutError("Timed out creating network slice.")
+        logger.info(f"Created network slice {network_slice_name}.")
