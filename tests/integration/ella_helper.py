@@ -78,10 +78,10 @@ class Ella:
         response = requests.post(url, json=DEVICE_GROUP_CONFIG)
         response.raise_for_status()
         logger.info(f"Created device group {device_group_name}.")
-    
+
     def wait_for_gnb(self, timeout: int = 300) -> tuple:
         """Wait for the gNB to be ready.
-        
+
         Args:
             timeout (int): Timeout in seconds
         """
@@ -90,19 +90,25 @@ class Ella:
             response = requests.get(f"{self.url}/config/v1/inventory/gnb")
             response.raise_for_status()
             data = response.json()
+            logger.info("Raw data: %s", data)
             if data:
                 gnb_name = data[0]["name"]
                 gnb_tac = data[0]["tac"]
                 logger.info(f"Found gNB {gnb_name} with TAC {gnb_tac}.")
                 return gnb_name, gnb_tac
             time.sleep(10)
+        raise TimeoutError("Timeout while waiting for gNB.")
 
-    def create_network_slice(self, network_slice_name: str, device_groups: list, gnb_name: str, gnb_tac: int) -> None:
+    def create_network_slice(
+        self, network_slice_name: str, device_groups: list, gnb_name: str, gnb_tac: int
+    ) -> None:
         """Create a network slice.
 
         Args:
             network_slice_name (str): Network slice name
             device_groups (list): List of device groups to be included in the network slice
+            gnb_name (str): gNB name
+            gnb_tac (int): gNB TAC
         """
         NETWORK_SLICE_CONFIG["site-device-group"] = device_groups
         NETWORK_SLICE_CONFIG["site-info"]["gNodeBs"] = [{"name": gnb_name, "tac": gnb_tac}]

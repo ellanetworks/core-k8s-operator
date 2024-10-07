@@ -48,7 +48,9 @@ def configure_ella(ops_test: OpsTest):
     gnb_name, gnb_tac = ella_client.wait_for_gnb()
     ella_client.create_subscriber(TEST_IMSI)
     ella_client.create_device_group(TEST_DEVICE_GROUP_NAME, [TEST_IMSI])
-    ella_client.create_network_slice(TEST_NETWORK_SLICE_NAME, [TEST_DEVICE_GROUP_NAME], gnb_name, gnb_tac)
+    ella_client.create_network_slice(
+        TEST_NETWORK_SLICE_NAME, [TEST_DEVICE_GROUP_NAME], gnb_name, gnb_tac
+    )
     # 5 seconds for the config to propagate
     time.sleep(9999999)
 
