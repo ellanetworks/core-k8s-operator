@@ -52,7 +52,7 @@ def configure_ella(ops_test: OpsTest):
         TEST_NETWORK_SLICE_NAME, [TEST_DEVICE_GROUP_NAME], gnb_name, gnb_tac
     )
     # 5 seconds for the config to propagate
-    time.sleep(9999999)
+    time.sleep(5)
 
 
 @pytest.mark.abort_on_fail
