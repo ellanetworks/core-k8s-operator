@@ -49,7 +49,7 @@ jobs:
           sudo microk8s kubectl auth can-i create network-attachment-definitions
 
       - name: Pull Workload Image
-        run: /usr/bin/sg snap_microk8s -c "sudo microk8s ctr images pull ghcr.io/yeastengine/ella:0.0.3 --user gruyaume:${{ secrets.GHCR_TOKEN }}"
+        run: /usr/bin/sg snap_microk8s -c "sudo microk8s ctr images pull ghcr.io/yeastengine/ella:0.0.3-45a5e93 --user gruyaume:${{ secrets.GHCR_TOKEN }}"
 
       - name: Run integration tests
         run: |
