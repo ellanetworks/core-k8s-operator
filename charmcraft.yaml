@@ -37,7 +37,7 @@ resources:
   ella-image:
     type: oci-image
     description: OCI image for ella
-    upstream-source: ghcr.io/yeastengine/ella:0.0.1
+    upstream-source: ghcr.io/yeastengine/ella:0.0.2
 
 storage:
   config:
