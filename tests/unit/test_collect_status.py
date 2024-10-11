@@ -3,8 +3,7 @@
 
 import tempfile
 
-from ops import ActiveStatus, BlockedStatus, WaitingStatus
-from scenario import Container, Mount, Relation, State
+from ops import ActiveStatus, BlockedStatus, WaitingStatus, testing
 
 from tests.unit.fixtures import EllaUnitTestFixtures
 
@@ -13,12 +12,12 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
     def test_given_cant_connect_when_collect_unit_status_then_waitingstatus(
         self,
     ):
-        container = Container(
+        container = testing.Container(
             name="ella",
             can_connect=False,
         )
 
-        state_in = State(
+        state_in = testing.State(
             containers=[container],
         )
 
@@ -29,12 +28,12 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
     def test_given_db_relation_not_created_when_collect_unit_status_then_blockedstatus(
         self,
     ):
-        container = Container(
+        container = testing.Container(
             name="ella",
             can_connect=True,
         )
 
-        state_in = State(containers=[container], relations=[])
+        state_in = testing.State(containers=[container], relations=[])
 
         state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)
 
@@ -42,14 +41,14 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
 
     def test_given_db_not_available_when_collect_status_then_waitingstatus(self):
         self.mock_db_is_created.return_value = False
-        container = Container(
+        container = testing.Container(
             name="ella",
             can_connect=True,
         )
 
-        state_in = State(
+        state_in = testing.State(
             containers=[container],
-            relations=[Relation(endpoint="database", interface="mongodb_client")],
+            relations=[testing.Relation(endpoint="database", interface="mongodb_client")],
         )
 
         state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)
@@ -60,14 +59,14 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
         self,
     ):
         self.mock_db_is_created.return_value = True
-        container = Container(
+        container = testing.Container(
             name="ella",
             can_connect=True,
         )
 
-        state_in = State(
+        state_in = testing.State(
             containers=[container],
-            relations=[Relation(endpoint="database", interface="mongodb_client")],
+            relations=[testing.Relation(endpoint="database", interface="mongodb_client")],
         )
 
         state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)
@@ -79,15 +78,17 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
     ):
         self.mock_db_is_created.return_value = True
         with tempfile.NamedTemporaryFile() as local_file:
-            container = Container(
+            container = testing.Container(
                 name="ella",
                 can_connect=True,
-                mounts={"config": Mount(location="/etc/ella/ella.yaml", source=local_file.name)},
+                mounts={
+                    "config": testing.Mount(location="/etc/ella/ella.yaml", source=local_file.name)
+                },
             )
 
-            state_in = State(
+            state_in = testing.State(
                 containers=[container],
-                relations=[Relation(endpoint="database", interface="mongodb_client")],
+                relations=[testing.Relation(endpoint="database", interface="mongodb_client")],
             )
 
             state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)

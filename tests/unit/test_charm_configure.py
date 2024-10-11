@@ -3,8 +3,8 @@
 
 import tempfile
 
+from ops import testing
 from ops.pebble import Layer
-from scenario import Container, Exec, Mount, Relation, State
 
 from ella import GnodeB
 from tests.unit.fixtures import EllaUnitTestFixtures
@@ -15,17 +15,19 @@ class TestCharmConfigure(EllaUnitTestFixtures):
         self,
     ):
         with tempfile.NamedTemporaryFile() as local_file:
-            container = Container(
+            container = testing.Container(
                 name="ella",
                 can_connect=True,
-                mounts={"config": Mount(location="/etc/ella/ella.yaml", source=local_file.name)},
+                mounts={
+                    "config": testing.Mount(location="/etc/ella/ella.yaml", source=local_file.name)
+                },
                 execs={
-                    Exec(
+                    testing.Exec(
                         command_prefix=["ip", "route", "show"],
                         return_code=0,
                         stdout="",
                     ),
-                    Exec(
+                    testing.Exec(
                         command_prefix=[
                             "ip",
                             "route",
@@ -39,7 +41,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                         return_code=0,
                         stdout="",
                     ),
-                    Exec(
+                    testing.Exec(
                         command_prefix=[
                             "ip",
                             "route",
@@ -53,8 +55,8 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                     ),
                 },
             )
-            db_relation = Relation(endpoint="database", interface="mongodb_client")
-            state_in = State(containers=[container], leader=True, relations=[db_relation])
+            db_relation = testing.Relation(endpoint="database", interface="mongodb_client")
+            state_in = testing.State(containers=[container], leader=True, relations=[db_relation])
             self.mock_db_relation_data.return_value = {
                 db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
             }
@@ -68,17 +70,19 @@ class TestCharmConfigure(EllaUnitTestFixtures):
         self,
     ):
         with tempfile.NamedTemporaryFile() as local_file:
-            container = Container(
+            container = testing.Container(
                 name="ella",
                 can_connect=True,
-                mounts={"config": Mount(location="/etc/ella/ella.yaml", source=local_file.name)},
+                mounts={
+                    "config": testing.Mount(location="/etc/ella/ella.yaml", source=local_file.name)
+                },
                 execs={
-                    Exec(
+                    testing.Exec(
                         command_prefix=["ip", "route", "show"],
                         return_code=0,
                         stdout="",
                     ),
-                    Exec(
+                    testing.Exec(
                         command_prefix=[
                             "ip",
                             "route",
@@ -92,7 +96,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                         return_code=0,
                         stdout="",
                     ),
-                    Exec(
+                    testing.Exec(
                         command_prefix=[
                             "ip",
                             "route",
@@ -106,8 +110,8 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                     ),
                 },
             )
-            db_relation = Relation(endpoint="database", interface="mongodb_client")
-            state_in = State(containers=[container], leader=True, relations=[db_relation])
+            db_relation = testing.Relation(endpoint="database", interface="mongodb_client")
+            state_in = testing.State(containers=[container], leader=True, relations=[db_relation])
             self.mock_db_relation_data.return_value = {
                 db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
             }
@@ -139,7 +143,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
             },
         )
 
-        gnb_relation = Relation(
+        gnb_relation = testing.Relation(
             endpoint="fiveg_gnb_identity",
             interface="fiveg_gnb_identity",
             remote_app_data={
@@ -148,17 +152,19 @@ class TestCharmConfigure(EllaUnitTestFixtures):
             },
         )
 
-        container = Container(
+        container = testing.Container(
             name="ella",
             can_connect=True,
-            mounts={"config": Mount(location="/etc/ella/ella.yaml", source="/tmp/ella.yaml")},
+            mounts={
+                "config": testing.Mount(location="/etc/ella/ella.yaml", source="/tmp/ella.yaml")
+            },
             execs={
-                Exec(
+                testing.Exec(
                     command_prefix=["ip", "route", "show"],
                     return_code=0,
                     stdout="",
                 ),
-                Exec(
+                testing.Exec(
                     command_prefix=[
                         "ip",
                         "route",
@@ -172,7 +178,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                     return_code=0,
                     stdout="",
                 ),
-                Exec(
+                testing.Exec(
                     command_prefix=[
                         "ip",
                         "route",
@@ -186,8 +192,8 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                 ),
             },
         )
-        db_relation = Relation(endpoint="database", interface="mongodb_client")
-        state_in = State(
+        db_relation = testing.Relation(endpoint="database", interface="mongodb_client")
+        state_in = testing.State(
             containers=[container], leader=True, relations=[db_relation, gnb_relation]
         )
         self.mock_db_relation_data.return_value = {
@@ -209,17 +215,19 @@ class TestCharmConfigure(EllaUnitTestFixtures):
             },
         )
 
-        container = Container(
+        container = testing.Container(
             name="ella",
             can_connect=True,
-            mounts={"config": Mount(location="/etc/ella/ella.yaml", source="/tmp/ella.yaml")},
+            mounts={
+                "config": testing.Mount(location="/etc/ella/ella.yaml", source="/tmp/ella.yaml")
+            },
             execs={
-                Exec(
+                testing.Exec(
                     command_prefix=["ip", "route", "show"],
                     return_code=0,
                     stdout="",
                 ),
-                Exec(
+                testing.Exec(
                     command_prefix=[
                         "ip",
                         "route",
@@ -233,7 +241,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                     return_code=0,
                     stdout="",
                 ),
-                Exec(
+                testing.Exec(
                     command_prefix=[
                         "ip",
                         "route",
@@ -247,8 +255,8 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                 ),
             },
         )
-        db_relation = Relation(endpoint="database", interface="mongodb_client")
-        state_in = State(containers=[container], leader=True, relations=[db_relation])
+        db_relation = testing.Relation(endpoint="database", interface="mongodb_client")
+        state_in = testing.State(containers=[container], leader=True, relations=[db_relation])
         self.mock_db_relation_data.return_value = {
             db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
         }
@@ -260,22 +268,24 @@ class TestCharmConfigure(EllaUnitTestFixtures):
         )
 
     def test_given_when_configure_then_n2_information_is_set(self):
-        n2_relation = Relation(
+        n2_relation = testing.Relation(
             endpoint="fiveg-n2",
             interface="fiveg_n2",
         )
-        db_relation = Relation(endpoint="database", interface="mongodb_client")
-        container = Container(
+        db_relation = testing.Relation(endpoint="database", interface="mongodb_client")
+        container = testing.Container(
             name="ella",
             can_connect=True,
-            mounts={"config": Mount(location="/etc/ella/ella.yaml", source="/tmp/ella.yaml")},
+            mounts={
+                "config": testing.Mount(location="/etc/ella/ella.yaml", source="/tmp/ella.yaml")
+            },
             execs={
-                Exec(
+                testing.Exec(
                     command_prefix=["ip", "route", "show"],
                     return_code=0,
                     stdout="",
                 ),
-                Exec(
+                testing.Exec(
                     command_prefix=[
                         "ip",
                         "route",
@@ -289,7 +299,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                     return_code=0,
                     stdout="",
                 ),
-                Exec(
+                testing.Exec(
                     command_prefix=[
                         "ip",
                         "route",
@@ -303,7 +313,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                 ),
             },
         )
-        state_in = State(
+        state_in = testing.State(
             containers=[container],
             relations=[n2_relation, db_relation],
             leader=True,
