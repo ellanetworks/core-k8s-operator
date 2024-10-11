@@ -139,7 +139,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
     ):
         self.mock_ella.configure_mock(
             **{
-                "get_gnbs_from_inventory.return_value": [],
+                "list_gnbs.return_value": [],
             },
         )
 
@@ -202,16 +202,14 @@ class TestCharmConfigure(EllaUnitTestFixtures):
 
         self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
-        self.mock_ella.add_gnb_to_inventory.assert_called_once_with(
-            gnb=GnodeB(name="gnb1", tac=1234)
-        )
+        self.mock_ella.create_gnb.assert_called_once_with(name="gnb1", tac=1234)
 
     def test_given_no_gnb_relation_and_gnb_info_in_inventory_when_configure_then_gnb_removed_from_inventory(
         self,
     ):
         self.mock_ella.configure_mock(
             **{
-                "get_gnbs_from_inventory.return_value": [GnodeB(name="gnb1", tac=1234)],
+                "list_gnbs.return_value": [GnodeB(name="gnb1", tac=1234)],
             },
         )
 
@@ -263,9 +261,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
 
         self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
-        self.mock_ella.delete_gnb_from_inventory.assert_called_once_with(
-            gnb=GnodeB(name="gnb1", tac=1234)
-        )
+        self.mock_ella.delete_gnb.assert_called_once_with(name="gnb1")
 
     def test_given_when_configure_then_n2_information_is_set(self):
         n2_relation = testing.Relation(

@@ -267,14 +267,14 @@ class EllaK8SCharm(CharmBase):
 
     def _sync_gnbs(self) -> None:
         """Sync the GNBs between the inventory and the relations."""
-        inventory_gnb_list = self.ella.get_gnbs_from_inventory()
+        inventory_gnb_list = self.ella.list_gnbs()
         relation_gnb_list = self._get_gnb_config_from_relations()
         for relation_gnb in relation_gnb_list:
             if relation_gnb not in inventory_gnb_list:
-                self.ella.add_gnb_to_inventory(gnb=relation_gnb)
+                self.ella.create_gnb(name=relation_gnb.name, tac=relation_gnb.tac)
         for inventory_gnb in inventory_gnb_list:
             if inventory_gnb not in relation_gnb_list:
-                self.ella.delete_gnb_from_inventory(gnb=inventory_gnb)
+                self.ella.delete_gnb(name=inventory_gnb.name)
 
     def _set_n2_information(self) -> None:
         if not self._relation_created(N2_RELATION_NAME):
