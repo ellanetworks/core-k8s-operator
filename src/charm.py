@@ -180,6 +180,16 @@ class EllaK8SCharm(CharmBase):
         event.add_status(ActiveStatus())
 
     def _configure(self, _: EventBase):
+        """Central configuration method.
+
+        Most events are handled by this method. It should remain idempotent.
+
+        It is used to:
+        - Configure Kubernetes resources
+        - Configure the config file
+        - Configure the Pebble layer
+        - Configure netorking
+        """
         try:  # workaround for https://github.com/canonical/operator/issues/736
             self._charm_config: CharmConfig = CharmConfig.from_charm(charm=self)
         except CharmConfigInvalidError:
@@ -196,14 +206,14 @@ class EllaK8SCharm(CharmBase):
         if not self._kubernetes_multus.multus_is_available():
             logger.warning("Multus is not available")
             return
+        if not self._database_is_available():
+            logger.warning("Database is not available")
+            return
         self._kubernetes_multus.configure()
         self._configure_ebpf_volume()
         self._configure_amf_service()
         self._configure_routes()
         self._enable_ip_forwarding()
-        if not self._database_is_available():
-            logger.warning("Database is not available")
-            return
         changed = self._configure_config_file()
         self._configure_pebble(restart=changed)
         self._set_n2_information()
@@ -267,14 +277,14 @@ class EllaK8SCharm(CharmBase):
 
     def _sync_gnbs(self) -> None:
         """Sync the GNBs between the inventory and the relations."""
-        inventory_gnb_list = self.ella.get_gnbs_from_inventory()
+        inventory_gnb_list = self.ella.list_gnbs()
         relation_gnb_list = self._get_gnb_config_from_relations()
         for relation_gnb in relation_gnb_list:
             if relation_gnb not in inventory_gnb_list:
-                self.ella.add_gnb_to_inventory(gnb=relation_gnb)
+                self.ella.create_gnb(name=relation_gnb.name, tac=relation_gnb.tac)
         for inventory_gnb in inventory_gnb_list:
             if inventory_gnb not in relation_gnb_list:
-                self.ella.delete_gnb_from_inventory(gnb=inventory_gnb)
+                self.ella.delete_gnb(name=inventory_gnb.name)
 
     def _set_n2_information(self) -> None:
         if not self._relation_created(N2_RELATION_NAME):
@@ -287,6 +297,7 @@ class EllaK8SCharm(CharmBase):
             amf_hostname=load_balancer_hostname if load_balancer_hostname else self._hostname(),
             amf_port=NGAPP_PORT,
         )
+        logger.info("N2 information set in relation")
 
     def _hostname(self) -> str:
         """Build and returns the AMF hostname in the cluster."""
@@ -337,7 +348,7 @@ class EllaK8SCharm(CharmBase):
 
     def _create_ran_route(self) -> None:
         """Create ip route towards gnb-subnet."""
-        stdout, stderr = self._exec_command_in_workload(
+        _, stderr = self._exec_command_in_workload(
             command=f"ip route replace {self._charm_config.gnb_subnet} via {self._charm_config.n3_gateway_ip}"
         )
         if stderr:

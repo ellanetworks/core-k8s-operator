@@ -4,7 +4,7 @@
 from unittest.mock import patch
 
 import pytest
-from scenario import Context
+from ops import testing
 
 from charm import EllaK8SCharm
 
@@ -42,4 +42,4 @@ class EllaUnitTestFixtures:
 
     @pytest.fixture(autouse=True)
     def context(self):
-        self.ctx = Context(charm_type=EllaK8SCharm)
+        self.ctx = testing.Context(charm_type=EllaK8SCharm)

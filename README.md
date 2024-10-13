@@ -9,7 +9,6 @@ juju add-model dev
 
 Deploy Ella K8s
 ```bash
-juju deploy sdcore-router-k8s --trust --channel=1.5/edge
 juju deploy ella-k8s --trust --channel=edge
 juju deploy mongodb-k8s --trust --channel=6/beta
 juju integrate ella-k8s:database mongodb-k8s:database
@@ -17,6 +16,7 @@ juju integrate ella-k8s:database mongodb-k8s:database
 
 Deploy the 5G gNodeB simulator
 ```bash
+juju deploy sdcore-router-k8s --trust --channel=1.5/edge
 juju deploy sdcore-gnbsim-k8s --trust --channel=1.5/edge
 juju integrate ella-k8s:fiveg_gnb_identity sdcore-gnbsim-k8s:fiveg_gnb_identity
 juju integrate sdcore-gnbsim-k8s:fiveg-n2 ella-k8s:fiveg-n2

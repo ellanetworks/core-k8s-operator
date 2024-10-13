@@ -4,15 +4,17 @@
 
 """Ella is a class that interacts with Ella."""
 
+import json
 import logging
-from dataclasses import dataclass
-from typing import List
+from dataclasses import asdict, dataclass
+from typing import Any, List
 
 import requests
 
 logger = logging.getLogger(__name__)
 
 GNB_CONFIG_URL = "config/v1/inventory/gnb"
+
 JSON_HEADER = {"Content-Type": "application/json"}
 
 
@@ -22,6 +24,13 @@ class GnodeB:
 
     name: str
     tac: int
+
+
+@dataclass
+class CreateGnbParams:
+    """Parameters to create a gNB."""
+
+    tac: str
 
 
 class Ella:
@@ -35,54 +44,62 @@ class Ella:
         """
         self.url = url
 
-    def get_gnbs_from_inventory(self) -> List[GnodeB]:
+    def _make_request(
+        self,
+        method: str,
+        endpoint: str,
+        data: any = None,  # type: ignore[reportGeneralTypeIssues]
+    ) -> Any | None:
+        """Make an HTTP request and handle common error patterns."""
+        headers = JSON_HEADER
+        url = f"{self.url}{endpoint}"
+        try:
+            response = requests.request(
+                method=method,
+                url=url,
+                headers=headers,
+                json=data,
+            )
+        except requests.RequestException as e:
+            logger.error("HTTP request failed: %s", e)
+            return None
+        except OSError as e:
+            logger.error("couldn't complete HTTP request: %s", e)
+            return None
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            logger.error(
+                "Request failed: code %s",
+                response.status_code,
+            )
+            return None
+        try:
+            json_response = response.json()
+        except json.JSONDecodeError:
+            return None
+        return json_response
+
+    def list_gnbs(self) -> List[GnodeB]:
         """Get the GnodeBs from the inventory."""
-        inventory_url = f"{self.url}/{GNB_CONFIG_URL}"
-        gnb_dict_list = self._get_resources_from_inventory(inventory_url)
-        return [GnodeB(gnb_dict["name"], int(gnb_dict["tac"])) for gnb_dict in gnb_dict_list]
-
-    def add_gnb_to_inventory(self, gnb: GnodeB) -> None:
-        """Add a GnodeB to the inventory.
-
-        Args:
-            gnb (GnodeB): The GnodeB to add to the inventory.
-        """
-        inventory_url = f"{self.url}/{GNB_CONFIG_URL}/{gnb.name}"
-        data = {"tac": str(gnb.tac)}
-        self._add_resource_to_inventory(inventory_url, gnb.name, data)
-
-    def delete_gnb_from_inventory(self, gnb: GnodeB) -> None:
-        """Delete a GnodeB from the inventory.
-
-        Args:
-            gnb (GnodeB): The GnodeB to delete from the inventory.
-        """
-        inventory_url = f"{self.url}/{GNB_CONFIG_URL}/{gnb.name}"
-        self._delete_resource_from_inventory(inventory_url, gnb.name)
-
-    def _get_resources_from_inventory(self, inventory_url: str) -> list:
-        response = requests.get(inventory_url)
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as e:
-            logger.error("Failed to get resource from inventory: %s", e)
+        response = self._make_request("GET", f"/{GNB_CONFIG_URL}")
+        if not response:
             return []
-        resources = response.json()
-        logger.info("Got %s from inventory", resources)
-        return resources
+        gnb_list = []
+        for item in response:
+            try:
+                gnb_list.append(GnodeB(name=item["name"], tac=int(item["tac"])))
+            except (ValueError, KeyError):
+                logger.error("invalid gNB data: %s", item)
+        return gnb_list
 
-    def _add_resource_to_inventory(self, url: str, resource_name: str, data: dict) -> None:
-        response = requests.post(url, headers=JSON_HEADER, json=data)
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as e:
-            logger.error("Failed to add %s to ella: %s. %s", resource_name, e, e.response.text)
-        logger.info("%s added to ella", resource_name)
+    def create_gnb(self, name: str, tac: int) -> None:
+        """Create a gNB in the NMS inventory."""
+        create_gnb_params = CreateGnbParams(tac=str(tac))
+        self._make_request("POST", f"/{GNB_CONFIG_URL}/{name}", data=asdict(create_gnb_params))
+        logger.info("gNB %s created in NMS", name)
 
-    def _delete_resource_from_inventory(self, inventory_url: str, resource_name: str) -> None:
-        response = requests.delete(inventory_url)
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as e:
-            logger.error("Failed to remove %s from ella: %s", resource_name, e)
-        logger.info("%s removed from ella", resource_name)
+    def delete_gnb(self, name: str) -> None:
+        """Delete a gNB list from the NMS inventory."""
+        self._make_request("DELETE", f"/{GNB_CONFIG_URL}/{name}")
+        logger.info("UPF %s deleted from NMS", name)
