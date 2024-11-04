@@ -17,12 +17,10 @@ logger = logging.getLogger(__name__)
 
 METADATA = yaml.safe_load(Path("./charmcraft.yaml").read_text())
 APP_NAME = METADATA["name"]
-DB_CHARM_NAME = "mongodb-k8s"
 GNBSIM_CHARM_NAME = "sdcore-gnbsim-k8s"
 GNBSIM_CHANNEL = "1.5/edge"
 ROUTER_CHARM_NAME = "sdcore-router-k8s"
 ROUTER_CHANNEL = "1.5/edge"
-DB_CHARM_CHANNEL = "6/beta"
 TEST_IMSI = "001010100007487"
 TEST_NETWORK_SLICE_NAME = "default"
 TEST_DEVICE_GROUP_NAME = "default-default"
@@ -97,20 +95,12 @@ async def test_build_and_deploy(ops_test: OpsTest, request):
         trust=True,
     )
     await ops_test.model.deploy(
-        entity_url=DB_CHARM_NAME,
-        application_name=DB_CHARM_NAME,
-        channel=DB_CHARM_CHANNEL,
-    )
-    await ops_test.model.deploy(
         entity_url=GNBSIM_CHARM_NAME,
         application_name=GNBSIM_CHARM_NAME,
         channel=GNBSIM_CHANNEL,
         trust=True,
     )
 
-    await ops_test.model.integrate(
-        relation1=f"{APP_NAME}:database", relation2=f"{DB_CHARM_NAME}:database"
-    )
     await ops_test.model.integrate(
         relation1=f"{APP_NAME}:fiveg-n2", relation2=f"{GNBSIM_CHARM_NAME}:fiveg-n2"
     )
@@ -120,7 +110,7 @@ async def test_build_and_deploy(ops_test: OpsTest, request):
     )
 
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME, GNBSIM_CHARM_NAME, DB_CHARM_NAME, ROUTER_CHARM_NAME],
+        apps=[APP_NAME, GNBSIM_CHARM_NAME, ROUTER_CHARM_NAME],
         status="active",
         timeout=1000,
     )

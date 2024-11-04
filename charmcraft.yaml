@@ -37,7 +37,7 @@ resources:
   ella-image:
     type: oci-image
     description: OCI image for ella
-    upstream-source: ghcr.io/yeastengine/ella:0.0.4
+    upstream-source: ghcr.io/yeastengine/ella:0.0.5-178
 
 storage:
   config:
@@ -76,8 +76,6 @@ config:
       description: Gateway IP address to the Access Network.
 
 requires:
-  database:
-    interface: mongodb_client
   fiveg_gnb_identity:
     interface: fiveg_gnb_identity
 

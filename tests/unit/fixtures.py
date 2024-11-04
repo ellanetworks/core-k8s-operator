@@ -15,8 +15,6 @@ class EllaUnitTestFixtures:
     patcher_k8s_ebpf = patch("charm.EBPFVolume")
     patcher_k8s_amf_service = patch("charm.AMFService")
     patcher_k8s_multus = patch("charm.KubernetesMultusCharmLib")
-    patcher_database_is_created = patch("charm.DatabaseRequires.is_resource_created")
-    patcher_database_relation_data = patch("charm.DatabaseRequires.fetch_relation_data")
     patcher_n2_provides_set_n2_information = patch("charm.N2Provides.set_n2_information")
 
     @pytest.fixture(autouse=True)
@@ -28,8 +26,6 @@ class EllaUnitTestFixtures:
             EllaUnitTestFixtures.patcher_k8s_amf_service.start().return_value
         )
         EllaUnitTestFixtures.patcher_k8s_multus.start()
-        self.mock_db_is_created = EllaUnitTestFixtures.patcher_database_is_created.start()
-        self.mock_db_relation_data = EllaUnitTestFixtures.patcher_database_relation_data.start()
         self.mock_n2_provides_set_n2_information = (
             EllaUnitTestFixtures.patcher_n2_provides_set_n2_information.start()
         )

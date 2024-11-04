@@ -55,11 +55,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                     ),
                 },
             )
-            db_relation = testing.Relation(endpoint="database", interface="mongodb_client")
-            state_in = testing.State(containers=[container], leader=True, relations=[db_relation])
-            self.mock_db_relation_data.return_value = {
-                db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
-            }
+            state_in = testing.State(containers=[container], leader=True, relations=[])
 
             self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
@@ -110,11 +106,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                     ),
                 },
             )
-            db_relation = testing.Relation(endpoint="database", interface="mongodb_client")
-            state_in = testing.State(containers=[container], leader=True, relations=[db_relation])
-            self.mock_db_relation_data.return_value = {
-                db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
-            }
+            state_in = testing.State(containers=[container], leader=True, relations=[])
 
             state_out = self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
@@ -192,13 +184,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                 ),
             },
         )
-        db_relation = testing.Relation(endpoint="database", interface="mongodb_client")
-        state_in = testing.State(
-            containers=[container], leader=True, relations=[db_relation, gnb_relation]
-        )
-        self.mock_db_relation_data.return_value = {
-            db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
-        }
+        state_in = testing.State(containers=[container], leader=True, relations=[gnb_relation])
 
         self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
@@ -253,11 +239,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                 ),
             },
         )
-        db_relation = testing.Relation(endpoint="database", interface="mongodb_client")
-        state_in = testing.State(containers=[container], leader=True, relations=[db_relation])
-        self.mock_db_relation_data.return_value = {
-            db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
-        }
+        state_in = testing.State(containers=[container], leader=True, relations=[])
 
         self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
@@ -268,7 +250,6 @@ class TestCharmConfigure(EllaUnitTestFixtures):
             endpoint="fiveg-n2",
             interface="fiveg_n2",
         )
-        db_relation = testing.Relation(endpoint="database", interface="mongodb_client")
         container = testing.Container(
             name="ella",
             can_connect=True,
@@ -311,12 +292,9 @@ class TestCharmConfigure(EllaUnitTestFixtures):
         )
         state_in = testing.State(
             containers=[container],
-            relations=[n2_relation, db_relation],
+            relations=[n2_relation],
             leader=True,
         )
-        self.mock_db_relation_data.return_value = {
-            db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
-        }
         self.mock_k8s_amf_service.get_info.return_value = "1.2.3.4", "my.hostname.com"
 
         self.ctx.run(self.ctx.on.pebble_ready(container), state_in)

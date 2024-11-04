@@ -10,7 +10,6 @@ from ipaddress import IPv4Address
 from subprocess import CalledProcessError, check_output
 from typing import List, Optional, Tuple
 
-from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.kubernetes_charm_libraries.v0.multus import (
     KubernetesMultusCharmLib,
     NetworkAnnotation,
@@ -56,18 +55,14 @@ N3_NETWORK_ATTACHMENT_DEFINITION_NAME = "n3-net"
 N6_NETWORK_ATTACHMENT_DEFINITION_NAME = "n6-net"
 N3_INTERFACE_NAME = "n3"
 N6_INTERFACE_NAME = "n6"
-DATABASE_RELATION_NAME = "database"
-DATABASE_NAME = "ella"
-NMS_PORT = 5000
+ELLA_PORT = 5000
 NGAPP_PORT = 38412
 N2_RELATION_NAME = "fiveg-n2"
 GNB_IDENTITY_RELATION_NAME = "fiveg_gnb_identity"
 PROMETHEUS_PORT = 8081
 
 
-def render_config_file(
-    interfaces: List[str], n3_address: str, database_url: str, database_name: str
-) -> str:
+def render_config_file(interfaces: List[str], n3_address: str) -> str:
     """Render the config file.
 
     Returns:
@@ -76,10 +71,9 @@ def render_config_file(
     jinja2_environment = Environment(loader=FileSystemLoader(CONFIG_TEMPLATE_DIR_PATH))
     template = jinja2_environment.get_template(CONFIG_TEMPLATE_NAME)
     content = template.render(
+        port=ELLA_PORT,
         interfaces=interfaces,
         n3_address=n3_address,
-        database_url=database_url,
-        database_name=database_name,
     )
     return content
 
@@ -105,9 +99,6 @@ class EllaK8SCharm(CharmBase):
         except CharmConfigInvalidError:
             logger.error("Invalid configuration")
             return
-        self._database = DatabaseRequires(
-            self, relation_name=DATABASE_RELATION_NAME, database_name=DATABASE_NAME
-        )
         self.n2_provider = N2Provides(self, N2_RELATION_NAME)
         self._gnb_identity = GnbIdentityRequires(self, GNB_IDENTITY_RELATION_NAME)
         self._kubernetes_multus = KubernetesMultusCharmLib(
@@ -141,8 +132,7 @@ class EllaK8SCharm(CharmBase):
             ],
         )
         self.ella = Ella(url=self._ella_endpoint)
-        self.unit.set_ports(NMS_PORT)
-        self.framework.observe(self._database.on.database_created, self._configure)
+        self.unit.set_ports(ELLA_PORT)
         self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
         self.framework.observe(self.on.update_status, self._configure)
         self.framework.observe(self.on["ella"].pebble_ready, self._configure)
@@ -169,10 +159,6 @@ class EllaK8SCharm(CharmBase):
         if not self._kubernetes_multus.is_ready():
             event.add_status(WaitingStatus("Waiting for Multus to be ready"))
             logger.info("Waiting for Multus to be ready")
-            return
-        if not self._database_is_available():
-            event.add_status(WaitingStatus("Waiting for the database to be available"))
-            logger.info("Waiting for the database to be available")
             return
         if not self._config_file_is_written():
             event.add_status(WaitingStatus("waiting for config file"))
@@ -205,9 +191,6 @@ class EllaK8SCharm(CharmBase):
             return
         if not self._kubernetes_multus.multus_is_available():
             logger.warning("Multus is not available")
-            return
-        if not self._database_is_available():
-            logger.warning("Database is not available")
             return
         self._kubernetes_multus.configure()
         self._configure_ebpf_volume()
@@ -258,7 +241,7 @@ class EllaK8SCharm(CharmBase):
 
     @property
     def _ella_endpoint(self) -> str:
-        return f"http://{get_pod_ip()}:{NMS_PORT}"
+        return f"http://{get_pod_ip()}:{ELLA_PORT}"
 
     def _get_gnb_config_from_relations(self) -> List[GnodeB]:
         gnb_name_tac_list = []
@@ -314,16 +297,13 @@ class EllaK8SCharm(CharmBase):
 
     def _missing_relations(self) -> List[str]:
         missing_relations = []
-        for relation in [DATABASE_RELATION_NAME]:
+        for relation in []:
             if not self._relation_created(relation):
                 missing_relations.append(relation)
         return missing_relations
 
     def _relation_created(self, relation_name: str) -> bool:
         return bool(self.model.relations.get(relation_name))
-
-    def _database_is_available(self) -> bool:
-        return self._database.is_resource_created()
 
     def _route_exists(self, dst: str, via: str | None) -> bool:
         """Return whether the specified route exist."""
@@ -444,14 +424,7 @@ class EllaK8SCharm(CharmBase):
         return render_config_file(
             interfaces=self._charm_config.interfaces,
             n3_address=str(self._charm_config.n3_ip),
-            database_url=self._get_database_info()["uris"].split(",")[0],
-            database_name=DATABASE_NAME,
         )
-
-    def _get_database_info(self) -> dict:
-        if not self._database_is_available():
-            raise RuntimeError(f"Database `{DATABASE_NAME}` is not available")
-        return self._database.fetch_relation_data()[self._database.relations[0].id]
 
     def _is_config_update_required(self, content: str) -> bool:
         if not self._config_file_is_written() or not self._config_file_content_matches(
