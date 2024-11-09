@@ -32,17 +32,27 @@ containers:
     mounts:
       - storage: config
         location: /etc/ella
+      - storage: certs
+        location: /etc/ella/certs
+      - storage: data
+        location: /var/lib/ella
 
 resources:
   ella-image:
     type: oci-image
     description: OCI image for ella
-    upstream-source: ghcr.io/yeastengine/ella:0.0.4
+    upstream-source: ghcr.io/yeastengine/ella:0.0.5-178
 
 storage:
   config:
     type: filesystem
     minimum-size: 1M
+  certs:
+    type: filesystem
+    minimum-size: 1M
+  data:
+    type: filesystem
+    minimum-size: 1G
 
 config:
   options:
@@ -76,7 +86,7 @@ config:
       description: Gateway IP address to the Access Network.
 
 requires:
-  database:
+  mongodb:
     interface: mongodb_client
   fiveg_gnb_identity:
     interface: fiveg_gnb_identity

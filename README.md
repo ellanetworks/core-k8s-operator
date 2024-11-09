@@ -11,7 +11,7 @@ Deploy Ella K8s
 ```bash
 juju deploy ella-k8s --trust --channel=edge
 juju deploy mongodb-k8s --trust --channel=6/beta
-juju integrate ella-k8s:database mongodb-k8s:database
+juju integrate ella-k8s:mongodb mongodb-k8s:database
 ```
 
 Deploy the 5G gNodeB simulator

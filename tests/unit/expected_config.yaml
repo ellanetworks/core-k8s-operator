@@ -1,6 +1,13 @@
+port: 5000
+tls:
+  cert: /etc/ella/certs/cert.pem
+  key: /etc/ella/certs/key.pem
 db:
-  url: mongodb://localhost:27017/ella
-  name: ella
+  mongo:
+    url: mongodb://localhost:27017/ella
+    name: ella
+  sql:
+    path: /var/lib/ella/sqlite.db
 upf:
   interfaces: ['n3', 'n6']
   n3-address: 192.168.252.3

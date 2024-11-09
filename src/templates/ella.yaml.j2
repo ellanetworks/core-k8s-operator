@@ -1,6 +1,13 @@
+port: {{ port }}
+tls:
+  cert: {{ tls_cert_path }}
+  key: {{ tls_key_path }}
 db:
-  url: {{ database_url }}
-  name: {{ database_name }}
+  mongo:
+    url: {{ mongo_db_url }}
+    name: {{ mongo_db_name }}
+  sql:
+    path: {{ sql_db_path }}
 upf:
   interfaces: {{ interfaces }}
   n3-address: {{ n3_address }}

@@ -6,6 +6,7 @@
 
 import json
 import logging
+from datetime import timedelta
 from ipaddress import IPv4Address
 from subprocess import CalledProcessError, check_output
 from typing import List, Optional, Tuple
@@ -22,6 +23,12 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
 from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
 from charms.sdcore_gnbsim_k8s.v0.fiveg_gnb_identity import (
     GnbIdentityRequires,
+)
+from charms.tls_certificates_interface.v4.tls_certificates import (
+    generate_ca,
+    generate_certificate,
+    generate_csr,
+    generate_private_key,
 )
 from jinja2 import Environment, FileSystemLoader
 from lightkube.models.meta_v1 import ObjectMeta
@@ -49,6 +56,8 @@ logger = logging.getLogger(__name__)
 
 CONFIG_TEMPLATE_DIR_PATH = "src/templates/"
 CONFIG_FILE_PATH = "/etc/ella/ella.yaml"
+CERTS_PATH = "/etc/ella/certs"
+SQL_DB_PATH = "/var/lib/ella"
 CONFIG_TEMPLATE_NAME = "ella.yaml.j2"
 N3_INTERFACE_BRIDGE_NAME = "access-br"
 N6_INTERFACE_BRIDGE_NAME = "core-br"
@@ -56,17 +65,26 @@ N3_NETWORK_ATTACHMENT_DEFINITION_NAME = "n3-net"
 N6_NETWORK_ATTACHMENT_DEFINITION_NAME = "n6-net"
 N3_INTERFACE_NAME = "n3"
 N6_INTERFACE_NAME = "n6"
-DATABASE_RELATION_NAME = "database"
-DATABASE_NAME = "ella"
+MONGODB_RELATION_NAME = "mongodb"
+MONGO_DB_NAME = "ella"
 NMS_PORT = 5000
 NGAPP_PORT = 38412
 N2_RELATION_NAME = "fiveg-n2"
 GNB_IDENTITY_RELATION_NAME = "fiveg_gnb_identity"
 PROMETHEUS_PORT = 8081
+TLS_CA_COMMON_NAME = "ella-ca"
+TLS_CERTIFICATE_COMMON_NAME = "ella"
 
 
 def render_config_file(
-    interfaces: List[str], n3_address: str, database_url: str, database_name: str
+    port: int,
+    tls_cert_path: str,
+    tls_key_path: str,
+    interfaces: List[str],
+    n3_address: str,
+    mongo_db_url: str,
+    mongo_db_name: str,
+    sql_db_path: str,
 ) -> str:
     """Render the config file.
 
@@ -76,10 +94,14 @@ def render_config_file(
     jinja2_environment = Environment(loader=FileSystemLoader(CONFIG_TEMPLATE_DIR_PATH))
     template = jinja2_environment.get_template(CONFIG_TEMPLATE_NAME)
     content = template.render(
+        port=port,
+        tls_cert_path=tls_cert_path,
+        tls_key_path=tls_key_path,
         interfaces=interfaces,
         n3_address=n3_address,
-        database_url=database_url,
-        database_name=database_name,
+        mongo_db_url=mongo_db_url,
+        mongo_db_name=mongo_db_name,
+        sql_db_path=sql_db_path,
     )
     return content
 
@@ -105,8 +127,8 @@ class EllaK8SCharm(CharmBase):
         except CharmConfigInvalidError:
             logger.error("Invalid configuration")
             return
-        self._database = DatabaseRequires(
-            self, relation_name=DATABASE_RELATION_NAME, database_name=DATABASE_NAME
+        self._mongodb = DatabaseRequires(
+            self, relation_name=MONGODB_RELATION_NAME, database_name=MONGO_DB_NAME
         )
         self.n2_provider = N2Provides(self, N2_RELATION_NAME)
         self._gnb_identity = GnbIdentityRequires(self, GNB_IDENTITY_RELATION_NAME)
@@ -142,7 +164,7 @@ class EllaK8SCharm(CharmBase):
         )
         self.ella = Ella(url=self._ella_endpoint)
         self.unit.set_ports(NMS_PORT)
-        self.framework.observe(self._database.on.database_created, self._configure)
+        self.framework.observe(self._mongodb.on.database_created, self._configure)
         self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
         self.framework.observe(self.on.update_status, self._configure)
         self.framework.observe(self.on["ella"].pebble_ready, self._configure)
@@ -170,9 +192,12 @@ class EllaK8SCharm(CharmBase):
             event.add_status(WaitingStatus("Waiting for Multus to be ready"))
             logger.info("Waiting for Multus to be ready")
             return
-        if not self._database_is_available():
-            event.add_status(WaitingStatus("Waiting for the database to be available"))
-            logger.info("Waiting for the database to be available")
+        if not self._mongo_db_is_available():
+            event.add_status(WaitingStatus("Waiting for MongoDB to be available"))
+            logger.info("Waiting for MongoDB to be available")
+            return
+        if not self._certificate_is_generated():
+            event.add_status(WaitingStatus("waiting for tls certificate"))
             return
         if not self._config_file_is_written():
             event.add_status(WaitingStatus("waiting for config file"))
@@ -206,7 +231,7 @@ class EllaK8SCharm(CharmBase):
         if not self._kubernetes_multus.multus_is_available():
             logger.warning("Multus is not available")
             return
-        if not self._database_is_available():
+        if not self._mongo_db_is_available():
             logger.warning("Database is not available")
             return
         self._kubernetes_multus.configure()
@@ -214,6 +239,7 @@ class EllaK8SCharm(CharmBase):
         self._configure_amf_service()
         self._configure_routes()
         self._enable_ip_forwarding()
+        self._configure_tls()
         changed = self._configure_config_file()
         self._configure_pebble(restart=changed)
         self._set_n2_information()
@@ -248,6 +274,40 @@ class EllaK8SCharm(CharmBase):
             logger.error("Failed to enable ip forwarding: %s", stderr)
             return
         logger.info("IP forwarding enabled")
+
+    def _configure_tls(self):
+        if not self._private_key_is_generated() or not self._certificate_is_generated():
+            self._generate_private_key_and_certificate()
+
+    def _private_key_is_generated(self) -> bool:
+        return bool(self.container.exists(f"{CERTS_PATH}/key.pem"))
+
+    def _certificate_is_generated(self) -> bool:
+        return bool(self.container.exists(f"{CERTS_PATH}/cert.pem"))
+
+    def _generate_private_key_and_certificate(self) -> None:
+        ca_private_key = generate_private_key()
+        ca_certificate = generate_ca(
+            private_key=ca_private_key,
+            common_name=TLS_CA_COMMON_NAME,
+            validity=timedelta(days=365 * 50),
+        )
+        private_key = generate_private_key()
+        csr = generate_csr(
+            private_key=private_key,
+            common_name=TLS_CERTIFICATE_COMMON_NAME,
+            sans_dns=frozenset([TLS_CERTIFICATE_COMMON_NAME]),
+        )
+        certificate = generate_certificate(
+            ca=ca_certificate,
+            ca_private_key=ca_private_key,
+            csr=csr,
+            validity=timedelta(days=365 * 50),
+        )
+        self.container.push(path=f"{CERTS_PATH}/key.pem", source=str(private_key))
+        logger.info("private key pushed to %s", f"{CERTS_PATH}/key.pem")
+        self.container.push(path=f"{CERTS_PATH}/cert.pem", source=str(certificate))
+        logger.info("certificate pushed to %s", f"{CERTS_PATH}/cert.pem")
 
     def _configure_config_file(self):
         desired_config_file = self._generate_config_file()
@@ -314,7 +374,7 @@ class EllaK8SCharm(CharmBase):
 
     def _missing_relations(self) -> List[str]:
         missing_relations = []
-        for relation in [DATABASE_RELATION_NAME]:
+        for relation in [MONGODB_RELATION_NAME]:
             if not self._relation_created(relation):
                 missing_relations.append(relation)
         return missing_relations
@@ -322,8 +382,8 @@ class EllaK8SCharm(CharmBase):
     def _relation_created(self, relation_name: str) -> bool:
         return bool(self.model.relations.get(relation_name))
 
-    def _database_is_available(self) -> bool:
-        return self._database.is_resource_created()
+    def _mongo_db_is_available(self) -> bool:
+        return self._mongodb.is_resource_created()
 
     def _route_exists(self, dst: str, via: str | None) -> bool:
         """Return whether the specified route exist."""
@@ -442,16 +502,20 @@ class EllaK8SCharm(CharmBase):
 
     def _generate_config_file(self) -> str:
         return render_config_file(
+            port=NMS_PORT,
+            tls_cert_path=f"{CERTS_PATH}/cert.pem",
+            tls_key_path=f"{CERTS_PATH}/key.pem",
             interfaces=self._charm_config.interfaces,
             n3_address=str(self._charm_config.n3_ip),
-            database_url=self._get_database_info()["uris"].split(",")[0],
-            database_name=DATABASE_NAME,
+            mongo_db_url=self._get_mongodb_info()["uris"].split(",")[0],
+            mongo_db_name=MONGO_DB_NAME,
+            sql_db_path=f"{SQL_DB_PATH}/sqlite.db",
         )
 
-    def _get_database_info(self) -> dict:
-        if not self._database_is_available():
-            raise RuntimeError(f"Database `{DATABASE_NAME}` is not available")
-        return self._database.fetch_relation_data()[self._database.relations[0].id]
+    def _get_mongodb_info(self) -> dict:
+        if not self._mongo_db_is_available():
+            raise RuntimeError(f"Mongo DB `{MONGO_DB_NAME}` is not available")
+        return self._mongodb.fetch_relation_data()[self._mongodb.relations[0].id]
 
     def _is_config_update_required(self, content: str) -> bool:
         if not self._config_file_is_written() or not self._config_file_content_matches(
