@@ -32,10 +32,8 @@ containers:
     mounts:
       - storage: config
         location: /etc/ella
-      - storage: certs
-        location: /etc/ella/certs
       - storage: data
-        location: /var/lib/ella
+        location: /ella/data
 
 resources:
   ella-image:
@@ -47,12 +45,9 @@ storage:
   config:
     type: filesystem
     minimum-size: 1M
-  certs:
-    type: filesystem
-    minimum-size: 1M
   data:
     type: filesystem
-    minimum-size: 1G
+    minimum-size: 5G
 
 config:
   options:
@@ -96,3 +91,6 @@ provides:
     interface: fiveg_n2
   metrics-endpoint:
     interface: prometheus_scrape
+
+assumes:
+  - k8s-api

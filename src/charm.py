@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
 CONFIG_TEMPLATE_DIR_PATH = "src/templates/"
 CONFIG_FILE_PATH = "/etc/ella/ella.yaml"
 CERTS_PATH = "/etc/ella/certs"
-SQL_DB_PATH = "/var/lib/ella"
+SQL_DB_PATH = "/ella/data"
 CONFIG_TEMPLATE_NAME = "ella.yaml.j2"
 N3_INTERFACE_BRIDGE_NAME = "access-br"
 N6_INTERFACE_BRIDGE_NAME = "core-br"
@@ -140,7 +140,7 @@ class EllaK8SCharm(CharmBase):
             cap_net_admin=True,
             network_annotations=self._generate_network_annotations(),
             network_attachment_definitions=self._network_attachment_definitions_from_config(),
-            privileged=True,
+            enable_ip_forwarding=True,
         )
         self._ebpf_volume = EBPFVolume(
             namespace=self.model.name,
@@ -177,6 +177,9 @@ class EllaK8SCharm(CharmBase):
         """Handle the collect status event."""
         if not self.container.can_connect():
             event.add_status(WaitingStatus("waiting for Pebble API"))
+            return
+        if not self._storages_attached():
+            event.add_status(WaitingStatus("storages not yet available"))
             return
         if missing_relations := self._missing_relations():
             event.add_status(
@@ -225,6 +228,9 @@ class EllaK8SCharm(CharmBase):
         if not self.container.can_connect():
             logger.warning("Pebble API is not ready")
             return
+        if not self._storages_attached():
+            logger.warning("Storages not yet available")
+            return
         if self._missing_relations():
             logger.warning("Missing relations")
             return
@@ -238,7 +244,6 @@ class EllaK8SCharm(CharmBase):
         self._configure_ebpf_volume()
         self._configure_amf_service()
         self._configure_routes()
-        self._enable_ip_forwarding()
         self._configure_tls()
         changed = self._configure_config_file()
         self._configure_pebble(restart=changed)
@@ -267,13 +272,6 @@ class EllaK8SCharm(CharmBase):
             via=str(self._charm_config.n3_gateway_ip),
         ):
             self._create_ran_route()
-
-    def _enable_ip_forwarding(self):
-        _, stderr = self._exec_command_in_workload(command="sysctl -w net.ipv4.ip_forward=1")
-        if stderr:
-            logger.error("Failed to enable ip forwarding: %s", stderr)
-            return
-        logger.info("IP forwarding enabled")
 
     def _configure_tls(self):
         if not self._private_key_is_generated() or not self._certificate_is_generated():
@@ -304,10 +302,21 @@ class EllaK8SCharm(CharmBase):
             csr=csr,
             validity=timedelta(days=365 * 50),
         )
-        self.container.push(path=f"{CERTS_PATH}/key.pem", source=str(private_key))
+        self.container.push(
+            path=f"{CERTS_PATH}/key.pem",
+            source=str(private_key),
+            make_dirs=True,
+        )
         logger.info("private key pushed to %s", f"{CERTS_PATH}/key.pem")
-        self.container.push(path=f"{CERTS_PATH}/cert.pem", source=str(certificate))
+        self.container.push(
+            path=f"{CERTS_PATH}/cert.pem",
+            source=str(certificate),
+            make_dirs=True,
+        )
         logger.info("certificate pushed to %s", f"{CERTS_PATH}/cert.pem")
+
+    def _storages_attached(self) -> bool:
+        return bool(self.model.storages.get("config")) and bool(self.model.storages.get("data"))
 
     def _configure_config_file(self):
         desired_config_file = self._generate_config_file()
@@ -447,11 +456,11 @@ class EllaK8SCharm(CharmBase):
             self.container.add_layer("ella", self._pebble_layer, combine=True)
             self.container.replan()
             logger.info("New layer added: %s", self._pebble_layer)
+            return
         if restart:
             self.container.restart("ella")
             logger.info("Restarted container ")
             return
-        self.container.replan()
 
     def _generate_network_annotations(self) -> List[NetworkAnnotation]:
         n3_network_annotation = NetworkAnnotation(
@@ -507,9 +516,9 @@ class EllaK8SCharm(CharmBase):
             tls_key_path=f"{CERTS_PATH}/key.pem",
             interfaces=self._charm_config.interfaces,
             n3_address=str(self._charm_config.n3_ip),
-            mongo_db_url=self._get_mongodb_info()["uris"].split(",")[0],
+            mongo_db_url="mongodb://localhost:27017",
             mongo_db_name=MONGO_DB_NAME,
-            sql_db_path=f"{SQL_DB_PATH}/sqlite.db",
+            sql_db_path=f"{SQL_DB_PATH}/ella.db",
         )
 
     def _get_mongodb_info(self) -> dict:
