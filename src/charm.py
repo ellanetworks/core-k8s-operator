@@ -118,7 +118,6 @@ class EllaK8SCharm(CharmBase):
             cap_net_admin=True,
             network_annotations=self._generate_network_annotations(),
             network_attachment_definitions=self._network_attachment_definitions_from_config(),
-            privileged=True,
         )
         self._ebpf_volume = EBPFVolume(
             namespace=self.model.name,
@@ -213,7 +212,6 @@ class EllaK8SCharm(CharmBase):
         self._configure_ebpf_volume()
         self._configure_amf_service()
         self._configure_routes()
-        self._enable_ip_forwarding()
         changed = self._configure_config_file()
         self._configure_pebble(restart=changed)
         self._set_n2_information()
@@ -241,13 +239,6 @@ class EllaK8SCharm(CharmBase):
             via=str(self._charm_config.n3_gateway_ip),
         ):
             self._create_ran_route()
-
-    def _enable_ip_forwarding(self):
-        _, stderr = self._exec_command_in_workload(command="sysctl -w net.ipv4.ip_forward=1")
-        if stderr:
-            logger.error("Failed to enable ip forwarding: %s", stderr)
-            return
-        logger.info("IP forwarding enabled")
 
     def _configure_config_file(self):
         desired_config_file = self._generate_config_file()
