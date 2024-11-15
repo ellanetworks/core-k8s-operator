@@ -56,8 +56,8 @@ logger = logging.getLogger(__name__)
 
 CONFIG_TEMPLATE_DIR_PATH = "src/templates/"
 CONFIG_FILE_PATH = "/etc/ella/ella.yaml"
-CERTS_PATH = "/etc/ella/certs"
-SQL_DB_PATH = "/ella/data"
+CERTS_PATH = "/etc/ella"
+SQL_DB_PATH = "/var/lib/ella"
 CONFIG_TEMPLATE_NAME = "ella.yaml.j2"
 N3_INTERFACE_BRIDGE_NAME = "access-br"
 N6_INTERFACE_BRIDGE_NAME = "core-br"
@@ -140,7 +140,7 @@ class EllaK8SCharm(CharmBase):
             cap_net_admin=True,
             network_annotations=self._generate_network_annotations(),
             network_attachment_definitions=self._network_attachment_definitions_from_config(),
-            enable_ip_forwarding=True,
+            privileged=True,
         )
         self._ebpf_volume = EBPFVolume(
             namespace=self.model.name,
@@ -244,6 +244,7 @@ class EllaK8SCharm(CharmBase):
         self._configure_ebpf_volume()
         self._configure_amf_service()
         self._configure_routes()
+        self._enable_ip_forwarding()
         self._configure_tls()
         changed = self._configure_config_file()
         self._configure_pebble(restart=changed)
@@ -272,6 +273,13 @@ class EllaK8SCharm(CharmBase):
             via=str(self._charm_config.n3_gateway_ip),
         ):
             self._create_ran_route()
+
+    def _enable_ip_forwarding(self):
+        _, stderr = self._exec_command_in_workload(command="sysctl -w net.ipv4.ip_forward=1")
+        if stderr:
+            logger.error("Failed to enable ip forwarding: %s", stderr)
+            return
+        logger.info("IP forwarding enabled")
 
     def _configure_tls(self):
         if not self._private_key_is_generated() or not self._certificate_is_generated():
@@ -362,7 +370,7 @@ class EllaK8SCharm(CharmBase):
             return
         load_balancer_ip, load_balancer_hostname = self.amf_service.get_info()
         self.n2_provider.set_n2_information(
-            amf_ip_address=load_balancer_ip,
+            amf_ip_address=load_balancer_ip if load_balancer_ip else get_pod_ip(),
             amf_hostname=load_balancer_hostname if load_balancer_hostname else self._hostname(),
             amf_port=NGAPP_PORT,
         )
@@ -516,7 +524,7 @@ class EllaK8SCharm(CharmBase):
             tls_key_path=f"{CERTS_PATH}/key.pem",
             interfaces=self._charm_config.interfaces,
             n3_address=str(self._charm_config.n3_ip),
-            mongo_db_url="mongodb://localhost:27017",
+            mongo_db_url=self._get_mongodb_info()["uris"].split(",")[0],
             mongo_db_name=MONGO_DB_NAME,
             sql_db_path=f"{SQL_DB_PATH}/ella.db",
         )
@@ -558,7 +566,7 @@ class EllaK8SCharm(CharmBase):
                 "services": {
                     "ella": {
                         "override": "replace",
-                        "summary": "ella",
+                        "summary": "Ella is a private mobile network.",
                         "command": "ella --config /etc/ella/ella.yaml",
                         "startup": "enabled",
                     }

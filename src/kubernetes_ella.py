@@ -16,6 +16,7 @@ from lightkube.models.core_v1 import (
     ServiceSpec,
     Volume,
     VolumeMount,
+    EmptyDirVolumeSource
 )
 from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.apps_v1 import StatefulSet
@@ -33,16 +34,24 @@ class EBPFVolume:
         self.app_name = app_name
         self.unit_name = unit_name
         self.container_name = container_name
-        self.requested_volumemount = VolumeMount(
+        self.ebpf_volumemount = VolumeMount(
             name="ebpf",
             mountPath="/sys/fs/bpf",
         )
-        self.requested_volume = Volume(
+        self.database_volumemount = VolumeMount(
+            name="database",
+            mountPath="/var/lib/ella",
+        )
+        self.ebpf_volume = Volume(
             name="ebpf",
             hostPath=HostPathVolumeSource(
                 path="/sys/fs/bpf",
                 type="",
             ),
+        )
+        self.database_volume = Volume(
+            name="database",
+            hostPath=EmptyDirVolumeSource(),
         )
 
     def is_created(self) -> bool:
@@ -60,8 +69,8 @@ class EBPFVolume:
                 return False
             logger.info("Pod `%s` not found", self._pod_name)
             return False
-        pod_has_volumemount = self._pod_contains_requested_volumemount(
-            requested_volumemount=self.requested_volumemount,
+        pod_has_volumemount = self._pod_contains_ebpf_volumemount(
+            ebpf_volumemount=self.ebpf_volumemount,
             containers=pod.spec.containers,  # type: ignore[attr-defined]
             container_name=self.container_name,
         )
@@ -82,17 +91,17 @@ class EBPFVolume:
             logger.info("Statefulset `%s` not found", self.app_name)
             return False
 
-        contains_volume = self._statefulset_contains_requested_volume(
+        contains_volume = self._statefulset_contains_ebpf_volume(
             statefulset_spec=statefulset.spec,  # type: ignore[attr-defined]
-            requested_volume=self.requested_volume,
+            ebpf_volume=self.ebpf_volume,
         )
         logger.info("Statefulset `%s` has eBPF volume: %s", self.app_name, contains_volume)
         return contains_volume
 
     @staticmethod
-    def _statefulset_contains_requested_volume(
+    def _statefulset_contains_ebpf_volume(
         statefulset_spec: StatefulSetSpec,
-        requested_volume: Volume,
+        ebpf_volume: Volume,
     ) -> bool:
         if not statefulset_spec.template.spec:
             logger.info("Statefulset has no template spec")
@@ -100,7 +109,7 @@ class EBPFVolume:
         if not statefulset_spec.template.spec.volumes:
             logger.info("Statefulset has no volumes")
             return False
-        return requested_volume in statefulset_spec.template.spec.volumes
+        return ebpf_volume in statefulset_spec.template.spec.volumes
 
     @classmethod
     def _get_container(
@@ -112,18 +121,18 @@ class EBPFVolume:
             logger.error("Container `%s` not found", container_name)
             return
 
-    def _pod_contains_requested_volumemount(
+    def _pod_contains_ebpf_volumemount(
         self,
         containers: Iterable[Container],
         container_name: str,
-        requested_volumemount: VolumeMount,
+        ebpf_volumemount: VolumeMount,
     ) -> bool:
         container = self._get_container(container_name=container_name, containers=containers)
         if not container:
             return False
         if not container.volumeMounts:
             return False
-        return requested_volumemount in container.volumeMounts
+        return ebpf_volumemount in container.volumeMounts
 
     def create(self) -> None:
         """Create the eBPF volume."""
@@ -141,13 +150,13 @@ class EBPFVolume:
             logger.error("Could not get container `%s`", self.container_name)
             return
         if not container.volumeMounts:
-            container.volumeMounts = [self.requested_volumemount]
+            container.volumeMounts = [self.ebpf_volumemount]
         else:
-            container.volumeMounts.append(self.requested_volumemount)
+            container.volumeMounts.append(self.ebpf_volumemount)
         if not statefulset.spec.template.spec.volumes:  # type: ignore[attr-defined]
-            statefulset.spec.template.spec.volumes = [self.requested_volume]  # type: ignore[attr-defined]
+            statefulset.spec.template.spec.volumes = [self.ebpf_volume]  # type: ignore[attr-defined]
         else:
-            statefulset.spec.template.spec.volumes.append(self.requested_volume)  # type: ignore[attr-defined]
+            statefulset.spec.template.spec.volumes.append(self.ebpf_volume)  # type: ignore[attr-defined]
         try:
             self.client.replace(obj=statefulset)
         except ApiError:

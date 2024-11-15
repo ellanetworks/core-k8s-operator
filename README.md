@@ -42,7 +42,7 @@ sdcore-gnbsim-k8s/0*  active    idle   10.1.19.129
 
 Navigate to Ella's Application address in your browser `http://10.152.183.124:5000`
 
-Creare a Network Slice
+Create a Network Slice
 
 Click on the `Network Slices` tab and click on the `Create` button. Create a network slice with the following parameters:
 - Name: `default`

@@ -33,7 +33,7 @@ containers:
       - storage: config
         location: /etc/ella
       - storage: data
-        location: /ella/data
+        location: /var/lib/ella
 
 resources:
   ella-image:

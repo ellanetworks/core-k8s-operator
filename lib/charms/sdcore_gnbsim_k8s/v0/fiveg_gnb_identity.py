@@ -134,8 +134,14 @@ Examples:
 class FivegGnbIdentityProviderAppData(BaseModel):
     """Provider app data for fiveg_gnb_identity."""
 
-    gnb_name: str = Field(description="Name of the gnB.", examples=["gnb001"])
-    tac: int = Field(description="Tracking Area Code", examples=[1])
+    gnb_name: str = Field(
+        description="Name of the gnB.",
+        examples=["gnb001"]
+    )
+    tac: int = Field(
+        description="Tracking Area Code",
+        examples=[1]
+    )
 
 
 class ProviderSchema(DataBagSchema):
@@ -216,7 +222,9 @@ class GnbIdentityProvides(Object):
         super().__init__(charm, relation_name)
         self.framework.observe(charm.on[relation_name].relation_joined, self._on_relation_joined)
 
-    def publish_gnb_identity_information(self, relation_id: int, gnb_name: str, tac: int) -> None:
+    def publish_gnb_identity_information(
+            self, relation_id: int, gnb_name: str, tac: int
+    ) -> None:
         """Set gNodeB's name and TAC in the relation data.
 
         Args:
@@ -224,7 +232,9 @@ class GnbIdentityProvides(Object):
             gnb_name (str): name of the gNodeB.
             tac (int): Tracking Area Code.
         """
-        if not data_matches_provider_schema(data={"gnb_name": gnb_name, "tac": tac}):
+        if not data_matches_provider_schema(
+                data={"gnb_name": gnb_name, "tac": tac}
+        ):
             raise ValueError(f"Invalid gnb identity data: {gnb_name}, {tac}")
         relation = self.model.get_relation(
             relation_name=self.relation_name, relation_id=relation_id
