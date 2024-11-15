@@ -16,7 +16,6 @@ from lightkube.models.core_v1 import (
     ServiceSpec,
     Volume,
     VolumeMount,
-    EmptyDirVolumeSource
 )
 from lightkube.models.meta_v1 import ObjectMeta
 from lightkube.resources.apps_v1 import StatefulSet
@@ -38,20 +37,12 @@ class EBPFVolume:
             name="ebpf",
             mountPath="/sys/fs/bpf",
         )
-        self.database_volumemount = VolumeMount(
-            name="database",
-            mountPath="/var/lib/ella",
-        )
         self.ebpf_volume = Volume(
             name="ebpf",
             hostPath=HostPathVolumeSource(
                 path="/sys/fs/bpf",
                 type="",
             ),
-        )
-        self.database_volume = Volume(
-            name="database",
-            hostPath=EmptyDirVolumeSource(),
         )
 
     def is_created(self) -> bool:

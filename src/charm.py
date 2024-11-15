@@ -370,7 +370,7 @@ class EllaK8SCharm(CharmBase):
             return
         load_balancer_ip, load_balancer_hostname = self.amf_service.get_info()
         self.n2_provider.set_n2_information(
-            amf_ip_address=load_balancer_ip if load_balancer_ip else get_pod_ip(),
+            amf_ip_address=load_balancer_ip if load_balancer_ip else "",
             amf_hostname=load_balancer_hostname if load_balancer_hostname else self._hostname(),
             amf_port=NGAPP_PORT,
         )

@@ -33,7 +33,11 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
             can_connect=True,
         )
 
-        state_in = testing.State(containers=[container], relations=[])
+        state_in = testing.State(
+            containers=[container],
+            relations=[],
+            storages=[testing.Storage(name="config"), testing.Storage(name="data")],
+        )
 
         state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)
 
@@ -49,6 +53,7 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
         state_in = testing.State(
             containers=[container],
             relations=[testing.Relation(endpoint="mongodb", interface="mongodb_client")],
+            storages=[testing.Storage(name="config"), testing.Storage(name="data")],
         )
 
         state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)
@@ -67,6 +72,7 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
         state_in = testing.State(
             containers=[container],
             relations=[testing.Relation(endpoint="mongodb", interface="mongodb_client")],
+            storages=[testing.Storage(name="config"), testing.Storage(name="data")],
         )
 
         state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)
@@ -81,7 +87,7 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
             container = testing.Container(
                 name="ella",
                 can_connect=True,
-                mounts={"certs": testing.Mount(location="/etc/ella/certs", source=temp_dir)},
+                mounts={"config": testing.Mount(location="/etc/ella", source=temp_dir)},
             )
 
             with open(f"{temp_dir}/key.pem", "w") as f:
@@ -93,6 +99,7 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
             state_in = testing.State(
                 containers=[container],
                 relations=[testing.Relation(endpoint="mongodb", interface="mongodb_client")],
+                storages=[testing.Storage(name="config"), testing.Storage(name="data")],
             )
 
             state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)
@@ -109,7 +116,6 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
                 can_connect=True,
                 mounts={
                     "config": testing.Mount(location="/etc/ella", source=temp_dir),
-                    "certs": testing.Mount(location="/etc/ella/certs", source=temp_dir),
                 },
             )
 
@@ -125,6 +131,7 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
             state_in = testing.State(
                 containers=[container],
                 relations=[testing.Relation(endpoint="mongodb", interface="mongodb_client")],
+                storages=[testing.Storage(name="config"), testing.Storage(name="data")],
             )
 
             state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)

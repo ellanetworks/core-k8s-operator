@@ -20,152 +20,6 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                 can_connect=True,
                 mounts={
                     "config": testing.Mount(location="/etc/ella", source=temp_dir),
-                    "certs": testing.Mount(location="/etc/ella/certs", source=temp_dir),
-                },
-                execs={
-                    testing.Exec(
-                        command_prefix=["ip", "route", "show"],
-                        return_code=0,
-                        stdout="",
-                    ),
-                    testing.Exec(
-                        command_prefix=[
-                            "ip",
-                            "route",
-                            "replace",
-                            "default",
-                            "via",
-                            "192.168.250.1",
-                            "metric",
-                            "110",
-                        ],
-                        return_code=0,
-                        stdout="",
-                    ),
-                    testing.Exec(
-                        command_prefix=[
-                            "ip",
-                            "route",
-                            "replace",
-                            "192.168.251.0/24",
-                            "via",
-                            "192.168.252.1",
-                        ],
-                        return_code=0,
-                        stdout="",
-                    ),
-                },
-            )
-            db_relation = testing.Relation(endpoint="mongodb", interface="mongodb_client")
-            state_in = testing.State(containers=[container], leader=True, relations=[db_relation])
-            self.mock_db_relation_data.return_value = {
-                db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
-            }
-
-            self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
-
-            with open("tests/unit/expected_config.yaml", "r") as f:
-                expected_config = f.read()
-
-            with open(f"{temp_dir}/ella.yaml", "r") as f:
-                actual_config = f.read()
-
-            assert actual_config == expected_config
-
-    def test_given_pebble_layer_not_created_when_configure_then_pebble_layer_created(
-        self,
-    ):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            container = testing.Container(
-                name="ella",
-                can_connect=True,
-                mounts={
-                    "config": testing.Mount(location="/etc/ella", source=temp_dir),
-                    "certs": testing.Mount(location="/etc/ella/certs", source=temp_dir),
-                },
-                execs={
-                    testing.Exec(
-                        command_prefix=["ip", "route", "show"],
-                        return_code=0,
-                        stdout="",
-                    ),
-                    testing.Exec(
-                        command_prefix=[
-                            "ip",
-                            "route",
-                            "replace",
-                            "default",
-                            "via",
-                            "192.168.250.1",
-                            "metric",
-                            "110",
-                        ],
-                        return_code=0,
-                        stdout="",
-                    ),
-                    testing.Exec(
-                        command_prefix=[
-                            "ip",
-                            "route",
-                            "replace",
-                            "192.168.251.0/24",
-                            "via",
-                            "192.168.252.1",
-                        ],
-                        return_code=0,
-                        stdout="",
-                    ),
-                },
-            )
-            db_relation = testing.Relation(endpoint="mongodb", interface="mongodb_client")
-            state_in = testing.State(containers=[container], leader=True, relations=[db_relation])
-            self.mock_db_relation_data.return_value = {
-                db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
-            }
-
-            state_out = self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
-
-            container = state_out.get_container("ella")
-            assert container.layers["ella"] == Layer(
-                {
-                    "summary": "ella layer",
-                    "description": "pebble config layer for ella",
-                    "services": {
-                        "ella": {
-                            "summary": "ella",
-                            "startup": "enabled",
-                            "override": "replace",
-                            "command": "ella --config /etc/ella/ella.yaml",
-                        }
-                    },
-                }
-            )
-
-    def test_given_gnb_relation_and_gnb_info_not_in_inventory_when_configure_then_gnb_added_to_inventory(
-        self,
-    ):
-        self.mock_ella.configure_mock(
-            **{
-                "list_gnbs.return_value": [],
-            },
-        )
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            gnb_relation = testing.Relation(
-                endpoint="fiveg_gnb_identity",
-                interface="fiveg_gnb_identity",
-                remote_app_data={
-                    "gnb_name": "gnb1",
-                    "tac": "1234",
-                },
-            )
-
-            container = testing.Container(
-                name="ella",
-                can_connect=True,
-                mounts={
-                    "config": testing.Mount(location="/etc/ella", source=temp_dir),
-                    "certs": testing.Mount(location="/etc/ella/certs", source=temp_dir),
                 },
                 execs={
                     testing.Exec(
@@ -203,7 +57,10 @@ class TestCharmConfigure(EllaUnitTestFixtures):
             )
             db_relation = testing.Relation(endpoint="mongodb", interface="mongodb_client")
             state_in = testing.State(
-                containers=[container], leader=True, relations=[db_relation, gnb_relation]
+                containers=[container],
+                leader=True,
+                relations=[db_relation],
+                storages=[testing.Storage(name="config"), testing.Storage(name="data")],
             )
             self.mock_db_relation_data.return_value = {
                 db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
@@ -211,24 +68,23 @@ class TestCharmConfigure(EllaUnitTestFixtures):
 
             self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
-            self.mock_ella.create_gnb.assert_called_once_with(name="gnb1", tac=1234)
+            with open("tests/unit/expected_config.yaml", "r") as f:
+                expected_config = f.read()
 
-    def test_given_no_gnb_relation_and_gnb_info_in_inventory_when_configure_then_gnb_removed_from_inventory(
+            with open(f"{temp_dir}/ella.yaml", "r") as f:
+                actual_config = f.read()
+
+            assert actual_config == expected_config
+
+    def test_given_pebble_layer_not_created_when_configure_then_pebble_layer_created(
         self,
     ):
-        self.mock_ella.configure_mock(
-            **{
-                "list_gnbs.return_value": [GnodeB(name="gnb1", tac=1234)],
-            },
-        )
-
         with tempfile.TemporaryDirectory() as temp_dir:
             container = testing.Container(
                 name="ella",
                 can_connect=True,
                 mounts={
                     "config": testing.Mount(location="/etc/ella", source=temp_dir),
-                    "certs": testing.Mount(location="/etc/ella/certs", source=temp_dir),
                 },
                 execs={
                     testing.Exec(
@@ -265,7 +121,165 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                 },
             )
             db_relation = testing.Relation(endpoint="mongodb", interface="mongodb_client")
-            state_in = testing.State(containers=[container], leader=True, relations=[db_relation])
+            state_in = testing.State(
+                containers=[container],
+                leader=True,
+                relations=[db_relation],
+                storages=[testing.Storage(name="config"), testing.Storage(name="data")],
+            )
+            self.mock_db_relation_data.return_value = {
+                db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
+            }
+
+            state_out = self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
+
+            container = state_out.get_container("ella")
+            assert container.layers["ella"] == Layer(
+                {
+                    "summary": "ella layer",
+                    "description": "pebble config layer for ella",
+                    "services": {
+                        "ella": {
+                            "summary": "Ella is a private mobile network.",
+                            "startup": "enabled",
+                            "override": "replace",
+                            "command": "ella --config /etc/ella/ella.yaml",
+                        }
+                    },
+                }
+            )
+
+    def test_given_gnb_relation_and_gnb_info_not_in_inventory_when_configure_then_gnb_added_to_inventory(
+        self,
+    ):
+        self.mock_ella.configure_mock(
+            **{
+                "list_gnbs.return_value": [],
+            },
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            gnb_relation = testing.Relation(
+                endpoint="fiveg_gnb_identity",
+                interface="fiveg_gnb_identity",
+                remote_app_data={
+                    "gnb_name": "gnb1",
+                    "tac": "1234",
+                },
+            )
+
+            container = testing.Container(
+                name="ella",
+                can_connect=True,
+                mounts={
+                    "config": testing.Mount(location="/etc/ella", source=temp_dir),
+                },
+                execs={
+                    testing.Exec(
+                        command_prefix=["ip", "route", "show"],
+                        return_code=0,
+                        stdout="",
+                    ),
+                    testing.Exec(
+                        command_prefix=[
+                            "ip",
+                            "route",
+                            "replace",
+                            "default",
+                            "via",
+                            "192.168.250.1",
+                            "metric",
+                            "110",
+                        ],
+                        return_code=0,
+                        stdout="",
+                    ),
+                    testing.Exec(
+                        command_prefix=[
+                            "ip",
+                            "route",
+                            "replace",
+                            "192.168.251.0/24",
+                            "via",
+                            "192.168.252.1",
+                        ],
+                        return_code=0,
+                        stdout="",
+                    ),
+                },
+            )
+            db_relation = testing.Relation(endpoint="mongodb", interface="mongodb_client")
+            state_in = testing.State(
+                containers=[container],
+                leader=True,
+                relations=[db_relation, gnb_relation],
+                storages=[testing.Storage(name="config"), testing.Storage(name="data")],
+            )
+            self.mock_db_relation_data.return_value = {
+                db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
+            }
+
+            self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
+
+            self.mock_ella.create_gnb.assert_called_once_with(name="gnb1", tac=1234)
+
+    def test_given_no_gnb_relation_and_gnb_info_in_inventory_when_configure_then_gnb_removed_from_inventory(
+        self,
+    ):
+        self.mock_ella.configure_mock(
+            **{
+                "list_gnbs.return_value": [GnodeB(name="gnb1", tac=1234)],
+            },
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            container = testing.Container(
+                name="ella",
+                can_connect=True,
+                mounts={
+                    "config": testing.Mount(location="/etc/ella", source=temp_dir),
+                },
+                execs={
+                    testing.Exec(
+                        command_prefix=["ip", "route", "show"],
+                        return_code=0,
+                        stdout="",
+                    ),
+                    testing.Exec(
+                        command_prefix=[
+                            "ip",
+                            "route",
+                            "replace",
+                            "default",
+                            "via",
+                            "192.168.250.1",
+                            "metric",
+                            "110",
+                        ],
+                        return_code=0,
+                        stdout="",
+                    ),
+                    testing.Exec(
+                        command_prefix=[
+                            "ip",
+                            "route",
+                            "replace",
+                            "192.168.251.0/24",
+                            "via",
+                            "192.168.252.1",
+                        ],
+                        return_code=0,
+                        stdout="",
+                    ),
+                },
+            )
+            db_relation = testing.Relation(endpoint="mongodb", interface="mongodb_client")
+            state_in = testing.State(
+                containers=[container],
+                leader=True,
+                relations=[db_relation],
+                storages=[testing.Storage(name="config"), testing.Storage(name="data")],
+            )
             self.mock_db_relation_data.return_value = {
                 db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
             }
@@ -286,7 +300,6 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                 can_connect=True,
                 mounts={
                     "config": testing.Mount(location="/etc/ella", source=temp_dir),
-                    "certs": testing.Mount(location="/etc/ella/certs", source=temp_dir),
                 },
                 execs={
                     testing.Exec(
@@ -326,6 +339,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                 containers=[container],
                 relations=[n2_relation, db_relation],
                 leader=True,
+                storages=[testing.Storage(name="config"), testing.Storage(name="data")],
             )
             self.mock_db_relation_data.return_value = {
                 db_relation.id: {"uris": "mongodb://localhost:27017/ella"}
