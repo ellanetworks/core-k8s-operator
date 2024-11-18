@@ -52,6 +52,9 @@ jobs:
           sudo tar xzvfC cilium-linux-${CLI_ARCH}.tar.gz /usr/local/bin
           rm cilium-linux-${CLI_ARCH}.tar.gz{,.sha256sum}
 
+          # Wait for Cilium to be ready
+          cilium status --wait
+
           # Set CNI to non-exclusive mode (required for Multus)
           cilium config set cni-exclusive false
 
