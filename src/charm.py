@@ -6,7 +6,6 @@
 
 import json
 import logging
-from datetime import timedelta
 from ipaddress import IPv4Address
 from subprocess import CalledProcessError, check_output
 from typing import List, Optional, Tuple
@@ -23,12 +22,6 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
 from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
 from charms.sdcore_gnbsim_k8s.v0.fiveg_gnb_identity import (
     GnbIdentityRequires,
-)
-from charms.tls_certificates_interface.v4.tls_certificates import (
-    generate_ca,
-    generate_certificate,
-    generate_csr,
-    generate_private_key,
 )
 from jinja2 import Environment, FileSystemLoader
 from lightkube.models.meta_v1 import ObjectMeta
@@ -56,7 +49,6 @@ logger = logging.getLogger(__name__)
 
 CONFIG_TEMPLATE_DIR_PATH = "src/templates/"
 CONFIG_FILE_PATH = "/etc/ella/ella.yaml"
-CERTS_PATH = "/etc/ella"
 SQL_DB_PATH = "/var/lib/ella"
 CONFIG_TEMPLATE_NAME = "ella.yaml.j2"
 N3_INTERFACE_BRIDGE_NAME = "access-br"
@@ -72,14 +64,9 @@ NGAPP_PORT = 38412
 N2_RELATION_NAME = "fiveg-n2"
 GNB_IDENTITY_RELATION_NAME = "fiveg_gnb_identity"
 PROMETHEUS_PORT = 8081
-TLS_CA_COMMON_NAME = "ella-ca"
-TLS_CERTIFICATE_COMMON_NAME = "ella"
 
 
 def render_config_file(
-    port: int,
-    tls_cert_path: str,
-    tls_key_path: str,
     interfaces: List[str],
     n3_address: str,
     mongo_db_url: str,
@@ -94,9 +81,6 @@ def render_config_file(
     jinja2_environment = Environment(loader=FileSystemLoader(CONFIG_TEMPLATE_DIR_PATH))
     template = jinja2_environment.get_template(CONFIG_TEMPLATE_NAME)
     content = template.render(
-        port=port,
-        tls_cert_path=tls_cert_path,
-        tls_key_path=tls_key_path,
         interfaces=interfaces,
         n3_address=n3_address,
         mongo_db_url=mongo_db_url,
@@ -199,9 +183,6 @@ class EllaK8SCharm(CharmBase):
             event.add_status(WaitingStatus("Waiting for MongoDB to be available"))
             logger.info("Waiting for MongoDB to be available")
             return
-        if not self._certificate_is_generated():
-            event.add_status(WaitingStatus("waiting for tls certificate"))
-            return
         if not self._config_file_is_written():
             event.add_status(WaitingStatus("waiting for config file"))
             return
@@ -245,7 +226,6 @@ class EllaK8SCharm(CharmBase):
         self._configure_amf_service()
         self._configure_routes()
         self._enable_ip_forwarding()
-        self._configure_tls()
         changed = self._configure_config_file()
         self._configure_pebble(restart=changed)
         self._set_n2_information()
@@ -280,48 +260,6 @@ class EllaK8SCharm(CharmBase):
             logger.error("Failed to enable ip forwarding: %s", stderr)
             return
         logger.info("IP forwarding enabled")
-
-    def _configure_tls(self):
-        if not self._private_key_is_generated() or not self._certificate_is_generated():
-            self._generate_private_key_and_certificate()
-
-    def _private_key_is_generated(self) -> bool:
-        return bool(self.container.exists(f"{CERTS_PATH}/key.pem"))
-
-    def _certificate_is_generated(self) -> bool:
-        return bool(self.container.exists(f"{CERTS_PATH}/cert.pem"))
-
-    def _generate_private_key_and_certificate(self) -> None:
-        ca_private_key = generate_private_key()
-        ca_certificate = generate_ca(
-            private_key=ca_private_key,
-            common_name=TLS_CA_COMMON_NAME,
-            validity=timedelta(days=365 * 50),
-        )
-        private_key = generate_private_key()
-        csr = generate_csr(
-            private_key=private_key,
-            common_name=TLS_CERTIFICATE_COMMON_NAME,
-            sans_dns=frozenset([TLS_CERTIFICATE_COMMON_NAME]),
-        )
-        certificate = generate_certificate(
-            ca=ca_certificate,
-            ca_private_key=ca_private_key,
-            csr=csr,
-            validity=timedelta(days=365 * 50),
-        )
-        self.container.push(
-            path=f"{CERTS_PATH}/key.pem",
-            source=str(private_key),
-            make_dirs=True,
-        )
-        logger.info("private key pushed to %s", f"{CERTS_PATH}/key.pem")
-        self.container.push(
-            path=f"{CERTS_PATH}/cert.pem",
-            source=str(certificate),
-            make_dirs=True,
-        )
-        logger.info("certificate pushed to %s", f"{CERTS_PATH}/cert.pem")
 
     def _storages_attached(self) -> bool:
         return bool(self.model.storages.get("config")) and bool(self.model.storages.get("data"))
@@ -519,9 +457,6 @@ class EllaK8SCharm(CharmBase):
 
     def _generate_config_file(self) -> str:
         return render_config_file(
-            port=NMS_PORT,
-            tls_cert_path=f"{CERTS_PATH}/cert.pem",
-            tls_key_path=f"{CERTS_PATH}/key.pem",
             interfaces=self._charm_config.interfaces,
             n3_address=str(self._charm_config.n3_ip),
             mongo_db_url=self._get_mongodb_info()["uris"].split(",")[0],
