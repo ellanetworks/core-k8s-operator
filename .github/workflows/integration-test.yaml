@@ -34,12 +34,9 @@ jobs:
       - name: Setup operator environment
         run: |
           # Install snaps
-          sudo snap install k8s --channel=1.30-classic/beta --classic
-          sudo snap install juju --channel=3.5/stable
-          sudo snap install lxd --channel=5.21/stable
+          sudo concierge prepare -p k8s --k8s-channel=1.30-classic/beta --lxd-channel "5.21/stable"
 
           # Bootstrap k8s
-          sudo k8s bootstrap
           sudo k8s disable gateway
           sudo k8s disable network
 
@@ -55,12 +52,6 @@ jobs:
           sha256sum --check cilium-linux-${CLI_ARCH}.tar.gz.sha256sum
           sudo tar xzvfC cilium-linux-${CLI_ARCH}.tar.gz /usr/local/bin
           rm cilium-linux-${CLI_ARCH}.tar.gz{,.sha256sum}
-
-          # Install Cilium
-          cilium install --version 1.16.3
-          
-          # Wait for Cilium to be ready
-          cilium status --wait
 
           # Set CNI to non-exclusive mode (required for Multus)
           cilium config set cni-exclusive false
@@ -78,18 +69,6 @@ jobs:
             blocks:
             - cidr: "10.0.10.0/24"
           EOF
-
-
-      # - name: Enable Multus addon
-      #   continue-on-error: true
-      #   run: |
-      #     sudo microk8s addons repo add community https://github.com/canonical/microk8s-community-addons --reference feat/strict-fix-multus
-      #     sudo microk8s enable multus
-      #     sudo microk8s kubectl -n kube-system rollout status daemonset/kube-multus-ds
-      #     sudo microk8s kubectl auth can-i create network-attachment-definitions
-
-      # - name: Pull Workload Image
-      #   run: /usr/bin/sg snap_microk8s -c "sudo microk8s ctr images pull ghcr.io/yeastengine/ella:0.0.5-183 --user gruyaume:${{ secrets.GHCR_TOKEN }}"
 
       # - name: Run integration tests
       #   run: |
