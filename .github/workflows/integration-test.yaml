@@ -34,7 +34,7 @@ jobs:
       - name: Setup operator environment
         run: |
           # Install snaps
-          sudo snap install k8s --channel=1.30-classic/beta
+          sudo snap install k8s --channel=1.30-classic/beta --classic
           sudo snap install juju --channel=3.5/stable
           sudo snap install lxd --channel=5.21/stable
 
@@ -68,7 +68,7 @@ jobs:
             blocks:
             - cidr: "10.0.10.0/24"
           EOF
-          
+
 
       # - name: Enable Multus addon
       #   continue-on-error: true
