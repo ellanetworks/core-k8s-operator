@@ -43,6 +43,10 @@ jobs:
           sudo k8s disable gateway
           sudo k8s disable network
 
+          # Copy kubeconfig to user home
+          mkdir -p ~/.kube
+          sudo k8s kubectl config view --raw > ~/.kube/config
+
           # Install Cilium CLI
           CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
           CLI_ARCH=amd64
