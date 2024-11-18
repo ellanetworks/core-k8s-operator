@@ -41,6 +41,7 @@ jobs:
 
           # Bootstrap k8s
           sudo k8s disable gateway
+          sudo k8s disable load-balancer
           sudo k8s disable network
 
           # Copy kubeconfig to user home
