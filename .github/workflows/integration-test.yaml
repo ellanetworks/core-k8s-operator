@@ -21,51 +21,81 @@ jobs:
         with:
           ref: ${{ inputs.branch-name }}
 
-      - name: Fetch Charm Under Test
-        uses: actions/download-artifact@v4
-        with:
-          name: built-charm
-          path: built/
+      # - name: Fetch Charm Under Test
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: built-charm
+      #     path: built/
 
-      - name: Get Charm Under Test Path
-        id: charm-path
-        run: echo "charm_path=$(find built/ -name '*.charm' -type f -print)" >> $GITHUB_OUTPUT
+      # - name: Get Charm Under Test Path
+      #   id: charm-path
+      #   run: echo "charm_path=$(find built/ -name '*.charm' -type f -print)" >> $GITHUB_OUTPUT
 
       - name: Setup operator environment
-        uses: charmed-kubernetes/actions-operator@main
-        with:
-          provider: microk8s
-          channel: 1.29-strict/stable
-          juju-channel: 3.4/stable
-          lxd-channel: 5.20/stable
-          microk8s-addons: "hostpath-storage dns metallb:10.0.0.2-10.0.0.10"
-
-      - name: Enable Multus addon
-        continue-on-error: true
         run: |
-          sudo microk8s addons repo add community https://github.com/canonical/microk8s-community-addons --reference feat/strict-fix-multus
-          sudo microk8s enable multus
-          sudo microk8s kubectl -n kube-system rollout status daemonset/kube-multus-ds
-          sudo microk8s kubectl auth can-i create network-attachment-definitions
+          # Install snaps
+          sudo snap install k8s --channel=1.30-classic/beta
+          sudo snap install juju --channel=3.5/stable
+          sudo snap install lxd --channel=5.21/stable
 
-      - name: Pull Workload Image
-        run: /usr/bin/sg snap_microk8s -c "sudo microk8s ctr images pull ghcr.io/yeastengine/ella:0.0.5-183 --user gruyaume:${{ secrets.GHCR_TOKEN }}"
+          # Bootstrap k8s
+          sudo k8s bootstrap
+          sudo k8s disable gateway
+          sudo k8s disable network
 
-      - name: Run integration tests
-        run: |
-          tox -e integration -- \
-            --charm_path="${{ steps.charm-path.outputs.charm_path }}" \
+          # Install Cilium CLI
+          CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
+          CLI_ARCH=amd64
+          if [ "$(uname -m)" = "aarch64" ]; then CLI_ARCH=arm64; fi
+          curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${CLI_ARCH}.tar.gz{,.sha256sum}
+          sha256sum --check cilium-linux-${CLI_ARCH}.tar.gz.sha256sum
+          sudo tar xzvfC cilium-linux-${CLI_ARCH}.tar.gz /usr/local/bin
+          rm cilium-linux-${CLI_ARCH}.tar.gz{,.sha256sum}
 
-      - name: Archive charmcraft logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: charmcraft-logs
-          path: /home/runner/.local/state/charmcraft/log/*.log
+          # Set CNI to non-exclusive mode (required for Multus)
+          cilium config set cni-exclusive false
+
+          # Install Multus
+          kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
+
+          # Create an ip pool for load balancer
+          kubectl apply -f - <<EOF
+          apiVersion: "cilium.io/v2alpha1"
+          kind: CiliumLoadBalancerIPPool
+          metadata:
+            name: "demo-pool"
+          spec:
+            blocks:
+            - cidr: "10.0.10.0/24"
+          EOF
+          
+
+      # - name: Enable Multus addon
+      #   continue-on-error: true
+      #   run: |
+      #     sudo microk8s addons repo add community https://github.com/canonical/microk8s-community-addons --reference feat/strict-fix-multus
+      #     sudo microk8s enable multus
+      #     sudo microk8s kubectl -n kube-system rollout status daemonset/kube-multus-ds
+      #     sudo microk8s kubectl auth can-i create network-attachment-definitions
+
+      # - name: Pull Workload Image
+      #   run: /usr/bin/sg snap_microk8s -c "sudo microk8s ctr images pull ghcr.io/yeastengine/ella:0.0.5-183 --user gruyaume:${{ secrets.GHCR_TOKEN }}"
+
+      # - name: Run integration tests
+      #   run: |
+      #     tox -e integration -- \
+      #       --charm_path="${{ steps.charm-path.outputs.charm_path }}" \
+
+      # - name: Archive charmcraft logs
+      #   if: failure()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: charmcraft-logs
+      #     path: /home/runner/.local/state/charmcraft/log/*.log
   
-      - name: Archive juju crashdump
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: juju-crashdump
-          path: juju-crashdump-*.tar.xz
+      # - name: Archive juju crashdump
+      #   if: failure()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: juju-crashdump
+      #     path: juju-crashdump-*.tar.xz

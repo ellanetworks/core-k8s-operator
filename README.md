@@ -2,6 +2,82 @@
 
 ## Getting Started
 
+Pre-requisites:
+- Ubuntu 24.04 machine
+  - [Cilium CLI](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/)
+
+### Install juju
+
+```shell
+sudo snap install juju --channel=3/stable
+```
+
+### Install Canonical Kubernetes
+
+Install Canonical Kubernetes:
+```shell
+sudo snap install k8s --channel=1.30-classic/beta --classic
+```
+
+Bootstrap the Kubernetes cluster
+```shell
+sudo k8s bootstrap
+```
+
+Disable the network feature:
+
+```shell
+sudo k8s disable gateway
+sudo k8s disable network
+```
+
+Install Cilium CLI
+
+```shell
+CILIUM_CLI_VERSION=$(curl -s https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt)
+CLI_ARCH=amd64
+if [ "$(uname -m)" = "aarch64" ]; then CLI_ARCH=arm64; fi
+curl -L --fail --remote-name-all https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-${CLI_ARCH}.tar.gz{,.sha256sum}
+sha256sum --check cilium-linux-${CLI_ARCH}.tar.gz.sha256sum
+sudo tar xzvfC cilium-linux-${CLI_ARCH}.tar.gz /usr/local/bin
+rm cilium-linux-${CLI_ARCH}.tar.gz{,.sha256sum}
+```
+
+Wait for Cilium to be ready:
+```shell
+cilium status --wait
+```
+
+Set the CNI to non-exclusive mode:
+```shell
+cilium config set cni-exclusive false
+```
+
+Create an IP Pool.
+
+Create a file named `ipam.yaml` with the following content:
+```yaml
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: "demo-pool"
+spec:
+  blocks:
+  - cidr: "10.0.10.0/24"
+```
+
+Apply the IP Pool:
+```shell
+kubectl apply -f ipam.yaml
+```
+
+Install Multus:
+```shell
+kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
+```
+
+### Deploy Ella
+
 Create a Juju model
 ```bash
 juju add-model dev
