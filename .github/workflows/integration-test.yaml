@@ -37,7 +37,7 @@ jobs:
           sudo snap install concierge --classic
 
           # Prepare k8s
-          sudo concierge prepare -p k8s --k8s-channel=1.30-classic/beta --lxd-channel "5.21/stable"
+          sudo concierge prepare -p k8s --k8s-channel=1.30-classic/beta --lxd-channel "5.21/stable" --extra-debs tox
 
           # Bootstrap k8s
           sudo k8s disable gateway
