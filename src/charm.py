@@ -249,7 +249,7 @@ class EllaCoreK8SCharm(CharmBase):
         self._configure_juju_workload_version()
 
     def _configure_access_certificates(self) -> bool:
-        """Update the config files for notary and replan if required."""
+        """Create the TLS certificates if they are not yet generated."""
         if not self._self_signed_certificates_generated():
             self._generate_self_signed_certificates()
             return True
@@ -501,7 +501,7 @@ class EllaCoreK8SCharm(CharmBase):
         return process.wait_output()
 
     def _configure_juju_workload_version(self):
-        """Set the Juju workload version to the Notary version."""
+        """Set the Juju workload version to the Ella Core version."""
         if not self.unit.is_leader():
             return
         if not self.ella.is_api_available():
