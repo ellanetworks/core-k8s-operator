@@ -35,10 +35,10 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: microk8s
-          channel: 1.29-strict/stable
-          juju-channel: 3.4/stable
+          channel: 1.32-strict/stable
+          juju-channel: 3.6/stable
           lxd-channel: 5.20/stable
-          microk8s-addons: "hostpath-storage dns metallb:10.0.0.2-10.0.0.10"
+          microk8s-addons: "hostpath-storage dns"
 
       - name: Enable Multus addon
         continue-on-error: true
@@ -47,9 +47,6 @@ jobs:
           sudo microk8s enable multus
           sudo microk8s kubectl -n kube-system rollout status daemonset/kube-multus-ds
           sudo microk8s kubectl auth can-i create network-attachment-definitions
-
-      - name: Pull Workload Image
-        run: /usr/bin/sg snap_microk8s -c "sudo microk8s ctr images pull ghcr.io/yeastengine/ella:0.0.4 --user gruyaume:${{ secrets.GHCR_TOKEN }}"
 
       - name: Run integration tests
         run: |
