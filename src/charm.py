@@ -6,11 +6,15 @@
 
 import json
 import logging
+import random
+import socket
+import string
+from dataclasses import dataclass
+from datetime import timedelta
 from ipaddress import IPv4Address
 from subprocess import CalledProcessError, check_output
 from typing import List, Optional, Tuple
 
-from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.kubernetes_charm_libraries.v0.multus import (
     KubernetesMultusCharmLib,
     NetworkAnnotation,
@@ -23,6 +27,13 @@ from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
 from charms.sdcore_gnbsim_k8s.v0.fiveg_gnb_identity import (
     GnbIdentityRequires,
 )
+from charms.tls_certificates_interface.v4.tls_certificates import (
+    Certificate,
+    generate_ca,
+    generate_certificate,
+    generate_csr,
+    generate_private_key,
+)
 from jinja2 import Environment, FileSystemLoader
 from lightkube.models.meta_v1 import ObjectMeta
 from ops import (
@@ -32,14 +43,15 @@ from ops import (
     EventBase,
     Framework,
     ModelError,
+    SecretNotFoundError,
     WaitingStatus,
     main,
 )
 from ops.charm import CollectStatusEvent
-from ops.pebble import ConnectionError, ExecError, Layer
+from ops.pebble import ConnectionError, ExecError, Layer, PathError
 
 from charm_config import CharmConfig, CharmConfigInvalidError
-from ella import Ella, GnodeB
+from core import EllaCore, Radio
 from kubernetes_ella import (
     AMFService,
     EBPFVolume,
@@ -47,26 +59,56 @@ from kubernetes_ella import (
 
 logger = logging.getLogger(__name__)
 
+SELF_SIGNED_CA_COMMON_NAME = "Ella Core Self Signed Root CA"
+CERTIFICATE_COMMON_NAME = "Ella Core Self Signed Certificate"
 CONFIG_TEMPLATE_DIR_PATH = "src/templates/"
-CONFIG_FILE_PATH = "/etc/ella/ella.yaml"
-CONFIG_TEMPLATE_NAME = "ella.yaml.j2"
+CONFIG_FILE_PATH = "/etc/core/core.yaml"
+CONFIG_TEMPLATE_NAME = "core.yaml.j2"
 N3_INTERFACE_BRIDGE_NAME = "access-br"
 N6_INTERFACE_BRIDGE_NAME = "core-br"
 N3_NETWORK_ATTACHMENT_DEFINITION_NAME = "n3-net"
 N6_NETWORK_ATTACHMENT_DEFINITION_NAME = "n6-net"
 N3_INTERFACE_NAME = "n3"
 N6_INTERFACE_NAME = "n6"
-DATABASE_RELATION_NAME = "database"
-DATABASE_NAME = "ella"
-NMS_PORT = 5000
+DATABASE_PATH = "/var/lib/core/core.db"
+API_PORT = 5000
+API_CA_CERT_PATH = "/etc/core/ca.pem"
+API_CERT_PATH = "/etc/core/cert.pem"
+API_KEY_PATH = "/etc/core/key.pem"
 NGAPP_PORT = 38412
 N2_RELATION_NAME = "fiveg-n2"
 GNB_IDENTITY_RELATION_NAME = "fiveg_gnb_identity"
 PROMETHEUS_PORT = 8081
+CORE_LOGIN_SECRET_LABEL = "Ella Core Login Details"
+ADMIN_EMAIL = "admin@ellanetworks.com"
+
+
+@dataclass
+class LoginSecret:
+    """The format of the secret for the login details that are required to login to Ella Core."""
+
+    email: str
+    password: str
+    token: str | None
+
+    def to_dict(self) -> dict[str, str]:
+        """Return a dict version of the secret."""
+        return {
+            "email": self.email,
+            "password": self.password,
+            "token": self.token if self.token else "",
+        }
 
 
 def render_config_file(
-    interfaces: List[str], n3_address: str, database_url: str, database_name: str
+    logging_level: str,
+    database_path: str,
+    n3_interface: str,
+    n3_address: str,
+    n6_interface: str,
+    api_port: int,
+    api_cert_path: str,
+    api_key_path: str,
 ) -> str:
     """Render the config file.
 
@@ -76,10 +118,14 @@ def render_config_file(
     jinja2_environment = Environment(loader=FileSystemLoader(CONFIG_TEMPLATE_DIR_PATH))
     template = jinja2_environment.get_template(CONFIG_TEMPLATE_NAME)
     content = template.render(
-        interfaces=interfaces,
+        logging_level=logging_level,
+        database_path=database_path,
+        n3_interface=n3_interface,
         n3_address=n3_address,
-        database_url=database_url,
-        database_name=database_name,
+        n6_interface=n6_interface,
+        api_port=api_port,
+        api_cert_path=api_cert_path,
+        api_key_path=api_key_path,
     )
     return content
 
@@ -93,21 +139,18 @@ def get_pod_ip() -> Optional[str]:
         return None
 
 
-class EllaK8SCharm(CharmBase):
-    """Charm the service."""
+class EllaCoreK8SCharm(CharmBase):
+    """Kubernetes charm for Ella Core."""
 
     def __init__(self, framework: Framework):
         super().__init__(framework)
-        self._container_name = self._service_name = "ella"
+        self._container_name = self._service_name = "core"
         self.container = self.unit.get_container(self._container_name)
         try:
             self._charm_config: CharmConfig = CharmConfig.from_charm(charm=self)
         except CharmConfigInvalidError:
             logger.error("Invalid configuration")
             return
-        self._database = DatabaseRequires(
-            self, relation_name=DATABASE_RELATION_NAME, database_name=DATABASE_NAME
-        )
         self.n2_provider = N2Provides(self, N2_RELATION_NAME)
         self._gnb_identity = GnbIdentityRequires(self, GNB_IDENTITY_RELATION_NAME)
         self._kubernetes_multus = KubernetesMultusCharmLib(
@@ -140,9 +183,8 @@ class EllaK8SCharm(CharmBase):
                 }
             ],
         )
-        self.ella = Ella(url=self._ella_endpoint)
-        self.unit.set_ports(NMS_PORT)
-        self.framework.observe(self._database.on.database_created, self._configure)
+        self.ella = EllaCore(url=self._ella_endpoint)
+        self.unit.set_ports(API_PORT)
         self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
         self.framework.observe(self.on.update_status, self._configure)
         self.framework.observe(self.on["ella"].pebble_ready, self._configure)
@@ -156,12 +198,6 @@ class EllaK8SCharm(CharmBase):
         if not self.container.can_connect():
             event.add_status(WaitingStatus("waiting for Pebble API"))
             return
-        if missing_relations := self._missing_relations():
-            event.add_status(
-                BlockedStatus(f"Waiting for {', '.join(missing_relations)} relation(s)")
-            )
-            logger.info("Waiting for %s  relation(s)", ", ".join(missing_relations))
-            return
         if not self._kubernetes_multus.multus_is_available():
             event.add_status(BlockedStatus("Multus is not installed or enabled"))
             logger.info("Multus is not installed or enabled")
@@ -169,10 +205,6 @@ class EllaK8SCharm(CharmBase):
         if not self._kubernetes_multus.is_ready():
             event.add_status(WaitingStatus("Waiting for Multus to be ready"))
             logger.info("Waiting for Multus to be ready")
-            return
-        if not self._database_is_available():
-            event.add_status(WaitingStatus("Waiting for the database to be available"))
-            logger.info("Waiting for the database to be available")
             return
         if not self._config_file_is_written():
             event.add_status(WaitingStatus("waiting for config file"))
@@ -200,24 +232,120 @@ class EllaK8SCharm(CharmBase):
         if not self.container.can_connect():
             logger.warning("Pebble API is not ready")
             return
-        if self._missing_relations():
-            logger.warning("Missing relations")
-            return
         if not self._kubernetes_multus.multus_is_available():
             logger.warning("Multus is not available")
-            return
-        if not self._database_is_available():
-            logger.warning("Database is not available")
             return
         self._kubernetes_multus.configure()
         self._configure_ebpf_volume()
         self._configure_amf_service()
         self._configure_routes()
         self._enable_ip_forwarding()
-        changed = self._configure_config_file()
-        self._configure_pebble(restart=changed)
+        config_file_changed = self._configure_config_file()
+        certs_changed = self._configure_access_certificates()
+        self._configure_pebble(restart=config_file_changed or certs_changed)
+        self._configure_charm_authorization()
         self._set_n2_information()
         self._sync_gnbs()
+        self._configure_juju_workload_version()
+
+    def _configure_access_certificates(self) -> bool:
+        """Update the config files for notary and replan if required."""
+        if not self._self_signed_certificates_generated():
+            self._generate_self_signed_certificates()
+            return True
+        return False
+
+    def _generate_self_signed_certificates(self) -> None:
+        """Generate self signed certificates and saves them to secrets and the charm."""
+        ca_private_key = generate_private_key()
+        ca_certificate = generate_ca(
+            private_key=ca_private_key,
+            common_name=SELF_SIGNED_CA_COMMON_NAME,
+            validity=timedelta(days=365),
+        )
+        private_key = generate_private_key()
+        csr = generate_csr(
+            private_key=private_key,
+            common_name=CERTIFICATE_COMMON_NAME,
+            sans_dns=frozenset([socket.getfqdn()]),
+        )
+        certificate = generate_certificate(
+            ca=ca_certificate,
+            ca_private_key=ca_private_key,
+            csr=csr,
+            validity=timedelta(days=365),
+        )
+        self.container.push(
+            API_CA_CERT_PATH,
+            str(ca_certificate),
+            make_dirs=True,
+        )
+        self.container.push(
+            API_CERT_PATH,
+            str(certificate),
+            make_dirs=True,
+        )
+        self.container.push(
+            API_KEY_PATH,
+            str(private_key),
+            make_dirs=True,
+        )
+        logger.info("Created self signed certificates.")
+
+    def _self_signed_certificates_generated(self) -> bool:
+        """Check if the workload certificate was generated and was self signed."""
+        try:
+            existing_cert = self.container.pull(API_CERT_PATH)
+        except PathError:
+            return False
+        cert = Certificate.from_string(existing_cert.read())
+        return cert.common_name == CERTIFICATE_COMMON_NAME
+
+    def _get_or_create_admin_account(self) -> LoginSecret | None:
+        """Get the first admin user for the charm to use from secrets. Create one if it doesn't exist.
+
+        Returns:
+            Login details secret if they exist. None if the related account couldn't be created in Ella Core.
+        """
+        try:
+            secret = self.model.get_secret(label=CORE_LOGIN_SECRET_LABEL)
+            secret_content = secret.get_content(refresh=True)
+            email = secret_content.get("email", "")
+            password = secret_content.get("password", "")
+            token = secret_content.get("token")
+            account = LoginSecret(email, password, token)
+        except SecretNotFoundError:
+            email = ADMIN_EMAIL
+            password = _generate_password()
+            account = LoginSecret(email, password, None)
+            self.app.add_secret(
+                label=CORE_LOGIN_SECRET_LABEL,
+                content=account.to_dict(),
+            )
+            logger.info("admin account details saved to secrets.")
+        if self.ella.is_api_available() and not self.ella.is_initialized():
+            response = self.ella.create_first_user(email, password)
+            if not response:
+                return None
+        return account
+
+    def _configure_charm_authorization(self):
+        """Create an admin user to manage Ella Core if needed, and acquire a token by logging in if needed."""
+        login_details = self._get_or_create_admin_account()
+        if not login_details:
+            return
+        if not login_details.token or not self.ella.token_is_valid(login_details.token):
+            login_response = self.ella.login(login_details.email, login_details.password)
+            if not login_response or not login_response.token:
+                logger.warning(
+                    "failed to login with the existing admin credentials."
+                    " If you've manually modified the admin account credentials,"
+                    " please update the charm's credentials secret accordingly."
+                )
+                return
+            login_details.token = login_response.token
+            login_details_secret = self.model.get_secret(label=CORE_LOGIN_SECRET_LABEL)
+            login_details_secret.set_content(login_details.to_dict())
 
     def _on_remove(self, _: EventBase):
         self._kubernetes_multus.remove()
@@ -258,9 +386,9 @@ class EllaK8SCharm(CharmBase):
 
     @property
     def _ella_endpoint(self) -> str:
-        return f"http://{get_pod_ip()}:{NMS_PORT}"
+        return f"http://{get_pod_ip()}:{API_PORT}"
 
-    def _get_gnb_config_from_relations(self) -> List[GnodeB]:
+    def _get_gnb_config_from_relations(self) -> List[Radio]:
         gnb_name_tac_list = []
         for gnb_identity_relation in self.model.relations.get(GNB_IDENTITY_RELATION_NAME, []):
             if not gnb_identity_relation.app:
@@ -272,19 +400,25 @@ class EllaK8SCharm(CharmBase):
             gnb_name = gnb_identity_relation.data[gnb_identity_relation.app].get("gnb_name", "")
             gnb_tac = gnb_identity_relation.data[gnb_identity_relation.app].get("tac", "")
             if gnb_name and gnb_tac:
-                gnb_name_tac_list.append(GnodeB(name=gnb_name, tac=int(gnb_tac)))
+                gnb_name_tac_list.append(Radio(name=gnb_name, tac=gnb_tac))
         return gnb_name_tac_list
 
     def _sync_gnbs(self) -> None:
         """Sync the GNBs between the inventory and the relations."""
-        inventory_gnb_list = self.ella.list_gnbs()
+        login_details = self._get_or_create_admin_account()
+        if not login_details or not login_details.token:
+            logger.warning("couldn't get admin account details to sync GNBs")
+            return
+        inventory_gnb_list = self.ella.list_radios(token=login_details.token)
         relation_gnb_list = self._get_gnb_config_from_relations()
         for relation_gnb in relation_gnb_list:
             if relation_gnb not in inventory_gnb_list:
-                self.ella.create_gnb(name=relation_gnb.name, tac=relation_gnb.tac)
+                self.ella.create_radio(
+                    name=relation_gnb.name, tac=relation_gnb.tac, token=login_details.token
+                )
         for inventory_gnb in inventory_gnb_list:
             if inventory_gnb not in relation_gnb_list:
-                self.ella.delete_gnb(name=inventory_gnb.name)
+                self.ella.delete_radio(name=inventory_gnb.name, token=login_details.token)
 
     def _set_n2_information(self) -> None:
         if not self._relation_created(N2_RELATION_NAME):
@@ -312,18 +446,8 @@ class EllaK8SCharm(CharmBase):
             return False
         return service.is_running()
 
-    def _missing_relations(self) -> List[str]:
-        missing_relations = []
-        for relation in [DATABASE_RELATION_NAME]:
-            if not self._relation_created(relation):
-                missing_relations.append(relation)
-        return missing_relations
-
     def _relation_created(self, relation_name: str) -> bool:
         return bool(self.model.relations.get(relation_name))
-
-    def _database_is_available(self) -> bool:
-        return self._database.is_resource_created()
 
     def _route_exists(self, dst: str, via: str | None) -> bool:
         """Return whether the specified route exist."""
@@ -375,6 +499,15 @@ class EllaK8SCharm(CharmBase):
             logger.error("Failed executing command in workload (ConnectionError): %s", command)
             return "", "ConnectionError"
         return process.wait_output()
+
+    def _configure_juju_workload_version(self):
+        """Set the Juju workload version to the Notary version."""
+        if not self.unit.is_leader():
+            return
+        if not self.ella.is_api_available():
+            return
+        if version := self.ella.get_version():
+            self.unit.set_workload_version(version)
 
     def _configure_pebble(self, restart=False) -> None:
         """Configure the Pebble layer.
@@ -442,16 +575,15 @@ class EllaK8SCharm(CharmBase):
 
     def _generate_config_file(self) -> str:
         return render_config_file(
-            interfaces=self._charm_config.interfaces,
+            logging_level=self._charm_config.logging_level,
+            database_path=DATABASE_PATH,
+            n3_interface=self._charm_config.n3_interface,
             n3_address=str(self._charm_config.n3_ip),
-            database_url=self._get_database_info()["uris"].split(",")[0],
-            database_name=DATABASE_NAME,
+            n6_interface=self._charm_config.n6_interface,
+            api_port=API_PORT,
+            api_cert_path=API_CERT_PATH,
+            api_key_path=API_KEY_PATH,
         )
-
-    def _get_database_info(self) -> dict:
-        if not self._database_is_available():
-            raise RuntimeError(f"Database `{DATABASE_NAME}` is not available")
-        return self._database.fetch_relation_data()[self._database.relations[0].id]
 
     def _is_config_update_required(self, content: str) -> bool:
         if not self._config_file_is_written() or not self._config_file_content_matches(
@@ -480,13 +612,13 @@ class EllaK8SCharm(CharmBase):
         """Return a dictionary representing a Pebble layer."""
         return Layer(
             {
-                "summary": "ella layer",
+                "summary": "ella core layer",
                 "description": "pebble config layer for ella",
                 "services": {
                     "ella": {
                         "override": "replace",
-                        "summary": "ella",
-                        "command": "ella --config /etc/ella/ella.yaml",
+                        "summary": "ella core",
+                        "command": "core --config /etc/core/core.yaml",
                         "startup": "enabled",
                     }
                 },
@@ -503,5 +635,18 @@ class EllaK8SCharm(CharmBase):
         return "-".join(self.model.unit.name.rsplit("/", 1))
 
 
+def _generate_password() -> str:
+    """Generate a password for the Ella Core admin user."""
+    pw = []
+    pw.append(random.choice(string.ascii_lowercase))
+    pw.append(random.choice(string.ascii_uppercase))
+    pw.append(random.choice(string.digits))
+    pw.append(random.choice(string.punctuation))
+    for i in range(8):
+        pw.append(random.choice(string.ascii_letters + string.digits + string.punctuation))
+    random.shuffle(pw)
+    return "".join(pw)
+
+
 if __name__ == "__main__":  # pragma: nocover
-    main(EllaK8SCharm)  # type: ignore
+    main(EllaCoreK8SCharm)  # type: ignore

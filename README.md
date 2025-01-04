@@ -2,16 +2,48 @@
 
 ## Getting Started
 
-Create a Juju model
+### Install Kubernetes
+
+Install MicroK8s
+
 ```bash
-juju add-model dev
+sudo snap install microk8s --channel=1.32-strict/stable
 ```
 
+Add the community repository MicroK8s addon:
+```shell
+sudo microk8s addons repo add community https://github.com/canonical/microk8s-community-addons --reference feat/strict-fix-multus
+```
+
+Enable the following MicroK8s addons.
+
+```shell
+sudo microk8s enable hostpath-storage
+sudo microk8s enable multus
+```
+
+### Install Juju
+
+Install Juju
+```shell
+sudo snap install juju --channel=3.6/stable
+```
+
+Bootstrap a Juju controller
+```shell
+juju bootstrap microk8s
+```
+
+Create a Juju model
+```shell
+juju add-model demo
+```
+
+### Deploy Ella Core K8s
+
 Deploy Ella K8s
-```bash
-juju deploy ella-k8s --trust --channel=edge
-juju deploy mongodb-k8s --trust --channel=6/beta
-juju integrate ella-k8s:database mongodb-k8s:database
+```shell
+juju deploy ella-core-k8s --trust --channel=edge
 ```
 
 Deploy the 5G gNodeB simulator
@@ -31,12 +63,10 @@ dev    microk8s-localhost  microk8s/localhost  3.5.1    unsupported  21:00:50-04
 
 App                Version  Status  Scale  Charm              Channel      Rev  Address         Exposed  Message
 ella-k8s                    active      1  ella-k8s           latest/edge   21  10.152.183.124  no       
-mongodb-k8s                 active      1  mongodb-k8s        6/edge        50  10.152.183.252  no       Primary
 sdcore-gnbsim-k8s  1.4.3    active      1  sdcore-gnbsim-k8s  1.5/edge     437  10.152.183.57   no       
 
 Unit                  Workload  Agent  Address      Ports  Message
 ella-k8s/0*           active    idle   10.1.19.156         
-mongodb-k8s/0*        active    idle   10.1.19.172         Primary
 sdcore-gnbsim-k8s/0*  active    idle   10.1.19.129  
 ```
 

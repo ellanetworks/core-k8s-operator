@@ -1,10 +1,10 @@
 
-name: ella-k8s
+name: ella-core-k8s
 type: charm
-title: Ella (K8s)
-summary: A private mobile network.
+title: Ella Core (K8s)
+summary: A secure, reliable, and easy to operate mobile core network.
 
-description: A private mobile network.
+description: A secure, reliable, and easy to operate mobile core network.
 links:
   source:
     - https://github.com/yeastengine/ella-k8s-operator
@@ -27,29 +27,38 @@ parts:
       - rustc
 
 containers:
-  ella:
-    resource: ella-image
+  core:
+    resource: core-image
     mounts:
       - storage: config
-        location: /etc/ella
+        location: /etc/core
+      - storage: database
+        location: /var/lib/core
 
 resources:
-  ella-image:
+  core-image:
     type: oci-image
-    description: OCI image for ella
-    upstream-source: ghcr.io/yeastengine/ella:0.0.4
+    description: OCI image for Ella Core.
+    upstream-source: ghcr.io/ellanetworks/core:0.0.4
 
 storage:
   config:
     type: filesystem
     minimum-size: 1M
+  database:
+    type: filesystem
+    minimum-size: 1G
 
 config:
   options:
-    interfaces:
+    n3-interface:
       type: string
-      default: "[n3,n6]"
-      description: List of network interfaces handling N3 (GTP) & N6 (SGi) traffic. Ella attaches XDP hook to every interface in this list.
+      default: "n3"
+      description: Network interface handling N3 (GTP) traffic. Ella Core attaches an XDP hook to this interface.
+    n6-interface:
+      type: string
+      default: "n6"
+      description: Network interface handling N6 (SGi) traffic. Ella Core attaches an XDP hook to this interface.
     logging-level:
       type: string
       default: debug
@@ -76,8 +85,6 @@ config:
       description: Gateway IP address to the Access Network.
 
 requires:
-  database:
-    interface: mongodb_client
   fiveg_gnb_identity:
     interface: fiveg_gnb_identity
 

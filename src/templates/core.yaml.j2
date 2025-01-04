@@ -1,0 +1,15 @@
+log-level: {{ logging_level }}
+db:
+  path: {{ database_path }}
+interfaces: 
+  n3: 
+    name: {{ n3_interface }}
+    address: {{ n3_address }}
+  n6:
+    name: {{ n6_interface }}
+  api:
+    name: "lo"
+    port: {{ api_port }}
+    tls:
+      cert: {{ api_cert_path }}
+      key: {{ api_key_path }}

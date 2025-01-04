@@ -6,7 +6,6 @@
 import dataclasses
 import logging
 from ipaddress import IPv4Address, IPv4Network
-from typing import List
 
 import ops
 from pydantic import (
@@ -40,7 +39,8 @@ class EllaConfig(BaseModel):
 
     model_config = ConfigDict(alias_generator=to_kebab, use_enum_values=True)
 
-    interfaces: List[str] = ["n3", "n6"]
+    n3_interface: str = "n3"
+    n6_interface: str = "n6"
     logging_level: str = "info"
     gnb_subnet: IPv4Network = IPv4Network("192.168.251.0/24")
     n3_ip: IPv4Address = IPv4Address("192.168.252.3")
@@ -53,7 +53,8 @@ class EllaConfig(BaseModel):
 class CharmConfig:
     """Represent the configuration of the charm."""
 
-    interfaces: List[str]
+    n3_interface: str
+    n6_interface: str
     logging_level: str
     gnb_subnet: IPv4Network
     n3_ip: IPv4Address
@@ -67,7 +68,8 @@ class CharmConfig:
         Args:
             ella_config: Ella operator configuration.
         """
-        self.interfaces = ella_config.interfaces
+        self.n3_interface = ella_config.n3_interface
+        self.n6_interface = ella_config.n6_interface
         self.logging_level = ella_config.logging_level
         self.gnb_subnet = ella_config.gnb_subnet
         self.n3_ip = ella_config.n3_ip
@@ -82,15 +84,10 @@ class CharmConfig:
     ) -> "CharmConfig":
         """Initialize a new instance of the CharmState class from the associated charm."""
         try:
-            # ignoring because mypy fails with:
-            # "has incompatible type "**dict[str, str]"; expected ...""
-            interfaces = str(charm.config.get("interfaces", "[n3,n6]"))
             return cls(
                 ella_config=EllaConfig(
-                    interfaces=interfaces.replace(" ", "")
-                    .replace("[", "")
-                    .replace("]", "")
-                    .split(","),
+                    n3_interface=str(charm.config.get("n3_interface", "n3")),
+                    n6_interface=str(charm.config.get("n6_interface", "n6")),
                     logging_level=str(charm.config.get("logging_level", "info")),
                     gnb_subnet=IPv4Network(charm.config.get("gnb_subnet", "192.168.251.0/24")),
                     n3_ip=IPv4Address(charm.config.get("n3_ip", "192.168.252.3")),

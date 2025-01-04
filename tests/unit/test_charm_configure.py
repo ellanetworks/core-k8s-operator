@@ -6,7 +6,7 @@ import tempfile
 from ops import testing
 from ops.pebble import Layer
 
-from ella import GnodeB
+from core import Radio
 from tests.unit.fixtures import EllaUnitTestFixtures
 
 
@@ -209,7 +209,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
     ):
         self.mock_ella.configure_mock(
             **{
-                "list_gnbs.return_value": [GnodeB(name="gnb1", tac=1234)],
+                "list_gnbs.return_value": [Radio(name="gnb1", tac="1234")],
             },
         )
 
