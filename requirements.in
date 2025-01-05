@@ -1,6 +1,6 @@
 lightkube
 lightkube-models
 ops
-pydantic==2.9.2
+pydantic==2.10.4
 pytest-interface-tester
 cosl
