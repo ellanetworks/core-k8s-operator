@@ -1,6 +1,24 @@
+logging:
+  system:
+    level: {{ logging_level }}
+    output: "stdout"
+  audit:
+    output: "stdout"
 db:
-  url: {{ database_url }}
-  name: {{ database_name }}
-upf:
-  interfaces: {{ interfaces }}
-  n3-address: {{ n3_address }}
+  path: {{ db_path }}
+interfaces:
+  n2:
+    name: {{ n2_interface }}
+    port: {{ n2_port }}
+  n3: 
+    name: {{ n3_interface }}
+  n6:
+    name: {{ n6_interface }}
+  api:
+    name: {{ api_interface }}
+    port: {{ api_port }}
+    tls:
+      cert: {{ api_tls_cert_path }}
+      key: {{ api_tls_key_path }}
+xdp:
+  attach-mode: {{ xdp_attach_mode }}

@@ -19,9 +19,21 @@ platforms:
 
 parts:
   charm:
+    source: .
+    charm-requirements:
+      - requirements.txt
+    plugin: charm
     build-packages:
-      - cargo
-      - rustc
+      - libffi-dev
+      - libssl-dev
+      - pkg-config
+    build-snaps:
+      - astral-uv
+      - rustup
+    override-build: |
+      rustup default stable
+      uv export --frozen --no-dev -o requirements.txt
+      craftctl default
 
 containers:
   ella:
@@ -43,10 +55,6 @@ storage:
 
 config:
   options:
-    interfaces:
-      type: string
-      default: "[n3,n6]"
-      description: List of network interfaces handling N3 (GTP) & N6 (SGi) traffic. Ella attaches XDP hook to every interface in this list.
     logging-level:
       type: string
       default: debug
@@ -72,14 +80,6 @@ config:
       default: 192.168.252.1
       description: Gateway IP address to the Access Network.
 
-requires:
-  database:
-    interface: mongodb_client
-  fiveg_gnb_identity:
-    interface: fiveg_gnb_identity
-
 provides:
-  fiveg-n2:
-    interface: fiveg_n2
   metrics-endpoint:
     interface: prometheus_scrape
