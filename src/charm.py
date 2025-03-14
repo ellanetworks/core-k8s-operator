@@ -349,7 +349,7 @@ class EllaK8SCharm(CharmBase):
     def _create_ran_route(self) -> None:
         """Create ip route towards gnb-subnet."""
         _, stderr = self._exec_command_in_workload(
-            command=f"ip route replace {self._charm_config.gnb_subnet} via {self._charm_config.n3_gateway_ip}"
+            command=f"ip route replace {self._charm_config.gnb_subnet} via {self._charm_config.n3_gateway_ip}"  # noqa: E501
         )
         if stderr:
             logger.error("Failed to create route to gnb-subnet (ExecError)")

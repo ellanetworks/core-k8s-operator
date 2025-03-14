@@ -1,0 +1,13 @@
+Metadata-Version: 2.2
+Name: core-k8s-operator
+Version: 0.1.0
+Requires-Python: >=3.10
+License-File: LICENSE
+Requires-Dist: cosl
+Requires-Dist: cryptography
+Requires-Dist: jinja2
+Requires-Dist: jsonschema
+Requires-Dist: ops
+Requires-Dist: pydantic<3.0
+Requires-Dist: pytest-interface-tester
+Requires-Dist: rpds-py==0.23.1

@@ -1,0 +1,12 @@
+LICENSE
+README.md
+pyproject.toml
+src/charm.py
+src/charm_config.py
+src/ella.py
+src/kubernetes_ella.py
+src/core_k8s_operator.egg-info/PKG-INFO
+src/core_k8s_operator.egg-info/SOURCES.txt
+src/core_k8s_operator.egg-info/dependency_links.txt
+src/core_k8s_operator.egg-info/requires.txt
+src/core_k8s_operator.egg-info/top_level.txt

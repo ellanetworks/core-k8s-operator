@@ -134,7 +134,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
                 }
             )
 
-    def test_given_gnb_relation_and_gnb_info_not_in_inventory_when_configure_then_gnb_added_to_inventory(
+    def test_given_gnb_relation_and_gnb_info_not_in_inventory_when_configure_then_gnb_added_to_inventory(  # noqa: E501
         self,
     ):
         self.mock_ella.configure_mock(
@@ -204,7 +204,7 @@ class TestCharmConfigure(EllaUnitTestFixtures):
 
         self.mock_ella.create_gnb.assert_called_once_with(name="gnb1", tac=1234)
 
-    def test_given_no_gnb_relation_and_gnb_info_in_inventory_when_configure_then_gnb_removed_from_inventory(
+    def test_given_no_gnb_relation_and_gnb_info_in_inventory_when_configure_then_gnb_removed_from_inventory(  # noqa: E501
         self,
     ):
         self.mock_ella.configure_mock(

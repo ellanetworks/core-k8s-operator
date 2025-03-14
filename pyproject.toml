@@ -1,3 +1,33 @@
+[project]
+name = "core-k8s-operator"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+dependencies = [
+    "cosl",
+    "cryptography",
+    "jinja2",
+    "jsonschema",
+    "ops",
+    "pydantic<3.0",
+    "pytest-interface-tester",
+    "rpds-py==0.23.1",
+]
+
+[dependency-groups]
+test = [
+    "coverage[toml]",
+    "juju>=3.6.1.0",
+    "pytest",
+    "pytest-operator",
+    "pytest-asyncio<0.23",
+]
+dev = [
+    "codespell",
+    "pyright",
+    "ruff",
+]
+
 # Testing tools configuration
 [tool.coverage.run]
 branch = true
@@ -9,13 +39,13 @@ show_missing = true
 minversion = "6.0"
 log_cli_level = "INFO"
 
-# Linting tools configuration
 [tool.ruff]
 line-length = 99
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "C", "N", "D", "I001"]
 extend-ignore = [
+    "D107",
     "D203",
     "D204",
     "D213",
@@ -28,14 +58,13 @@ extend-ignore = [
     "D409",
     "D413",
 ]
-ignore = ["E501", "D107"]
-per-file-ignores = {"tests/*" = ["D100","D101","D102","D103"]}
+per-file-ignores = {"tests/*" = ["D100","D101","D102","D103","D104"]}
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
 
 [tool.codespell]
-skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
+skip = "build,lib,venv,icon.svg,.tox,.git,.ruff_cache,.coverage"
 
 [tool.pyright]
-include = ["src/**.py","tests/**.py"]
+include = ["src/**.py"]

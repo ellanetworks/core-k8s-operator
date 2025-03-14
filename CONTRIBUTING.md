@@ -1,34 +1,67 @@
 # Contributing
+To make contributions to this charm, you'll need a working Juju development setup.
 
-To make contributions to this charm, you'll need a working [development setup](https://juju.is/docs/sdk/dev-setup).
+## Prerequisites
+Install Charmcraft and LXD:
+```shell
+sudo snap install --classic charmcraft
+sudo snap install lxd
+sudo adduser $USER lxd
+newgrp lxd
+lxd init --auto
+```
 
-You can create an environment for development with `tox`:
+Install MicroK8s:
+```shell
+sudo snap install microk8s --channel=1.32-strict/stable
+sudo usermod -a -G snap_microk8s $USER
+newgrp snap_microk8s
+sudo microk8s enable hostpath-storage
+```
+
+Install Juju and bootstrap a controller on the MicroK8S instance:
+```shell
+sudo snap install juju --channel=3.6/stable
+juju bootstrap microk8s
+```
+
+This project uses `uv`. You can install it on Ubuntu with:
 
 ```shell
-tox devenv -e integration
-source venv/bin/activate
+sudo snap install --classic astral-uv
+```
+
+You can create an environment for development with `uv`:
+
+```shell
+uv sync
+source .venv/bin/activate
 ```
 
 ## Testing
+This project uses `tox` for managing test environments. It can be installed
+with:
 
-This project uses `tox` for managing test environments. There are some pre-configured environments
+```shell
+uv tool install tox --with tox-uv
+```
+
+There are some pre-configured environments
 that can be used for linting and formatting code when you're preparing contributions to the charm:
 
 ```shell
-tox run -e format        # update your code according to linting rules
-tox run -e lint          # code style
-tox run -e static        # static type checking
-tox run -e unit          # unit tests
-tox run -e integration   # integration tests
-tox                      # runs 'format', 'lint', 'static', and 'unit' environments
+tox -e lint                                             # code style
+tox -e static                                           # static analysis
+tox -e unit                                             # unit tests
+tox -e integration -- --charm_path=PATH_TO_BUILD_CHARM  # integration tests
 ```
 
-## Build the charm
+```note
+Integration tests require the charm to be built with `charmcraft pack` first.
+```
 
-Build the charm in this git repository using:
-
-```shell
+## Build
+Go to the charm directory and run:
+```bash
 charmcraft pack
 ```
-
-<!-- You may want to include any contribution/style guidelines in this document>
