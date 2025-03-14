@@ -1,5 +1,0 @@
-charm
-charm_config
-ella
-kubernetes_ella
-templates
