@@ -395,17 +395,25 @@ class EllaK8SCharm(CharmBase):
 
     def _get_n2_amf_ip(self) -> Optional[str]:
         amf_service_ip, _ = self.amf_service.get_info()
-        return amf_service_ip
+        if amf_service_ip:
+            return amf_service_ip
+        return self._charm_config.n2_ip
 
     def _set_n2_information(self) -> None:
         """Set N2 information for the N2 relation."""
         if not self._relation_created(N2_RELATION_NAME):
+            logger.info("TO DELETE: N2 relation not created")
             return
         if not self._service_is_running():
+            logger.info("TO DELETE: Service is not running")
             return
         n2_amf_ip = self._get_n2_amf_ip()
         n2_amf_hostname = self._get_n2_amf_hostname()
-        if not n2_amf_ip or not n2_amf_hostname:
+        if not n2_amf_ip:
+            logger.info("TO DELETE: N2 AMF IP not found")
+            return
+        if not n2_amf_hostname:
+            logger.info("TO DELETE: N2 AMF hostname not found")
             return
         self.n2_provider.set_n2_information(
             amf_ip_address=n2_amf_ip,
