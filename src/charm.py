@@ -91,14 +91,12 @@ class LoginSecret:
 
     email: str
     password: str
-    token: str | None
 
     def to_dict(self) -> dict[str, str]:
         """Return a dict version of the secret."""
         return {
             "email": self.email,
             "password": self.password,
-            "token": self.token if self.token else "",
         }
 
 
@@ -323,11 +321,19 @@ class EllaK8SCharm(CharmBase):
 
     def _set_gnb_information(self):
         """Synchronize network configuration between the Core and the RAN."""
-        login_details = self._get_admin_account()
-        if not login_details or not login_details.token:
-            logger.warning("Failed to get admin account details")
-            return []
-        self._ella_core.set_token(login_details.token)
+        login_credentials = self._get_admin_account()
+        if not login_credentials:
+            logger.warning("Admin account not found.")
+            return
+        token = self._ella_core.login(login_credentials.email, login_credentials.password)
+        if not token:
+            logger.warning(
+                "failed to login with the existing admin credentials."
+                " If you've manually modified the admin account credentials,"
+                " please update the charm's credentials secret accordingly."
+            )
+            return
+        self._ella_core.set_token(token)
         operator = self._ella_core.get_operator()
         for relation in self.model.relations.get(FIVEG_CORE_GNB_RELATION_NAME, []):
             if not relation.app:
@@ -357,7 +363,7 @@ class EllaK8SCharm(CharmBase):
         if not account:
             email = CHARM_USER_EMAIL
             password = _generate_password()
-            account = LoginSecret(email, password, None)
+            account = LoginSecret(email, password)
             self.app.add_secret(
                 label=ELLA_CORE_LOGIN_SECRET_LABEL,
                 content=account.to_dict(),
@@ -381,8 +387,7 @@ class EllaK8SCharm(CharmBase):
             secret_content = secret.get_content(refresh=True)
             email = secret_content.get("email", "")
             password = secret_content.get("password", "")
-            token = secret_content.get("token")
-            return LoginSecret(email, password, token)
+            return LoginSecret(email, password)
         except SecretNotFoundError:
             logger.info("Core login secret not found.")
             return None
@@ -402,18 +407,14 @@ class EllaK8SCharm(CharmBase):
     def _set_n2_information(self) -> None:
         """Set N2 information for the N2 relation."""
         if not self._relation_created(N2_RELATION_NAME):
-            logger.warning("TO DELETE: N2 relation not created")
             return
         if not self._service_is_running():
-            logger.warning("TO DELETE: Service is not running")
             return
         n2_amf_ip = self._get_n2_amf_ip()
         n2_amf_hostname = self._get_n2_amf_hostname()
         if not n2_amf_ip:
-            logger.warning("TO DELETE: N2 AMF IP not found")
             return
         if not n2_amf_hostname:
-            logger.warning("TO DELETE: N2 AMF hostname not found")
             return
         self.n2_provider.set_n2_information(
             amf_ip_address=n2_amf_ip,
