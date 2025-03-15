@@ -2,7 +2,7 @@
 
 [Ella Core](https://github.com/ellanetworks/core) is a 5G mobile core network designed for private deployments. It consolidates the complexity of traditional 5G networks into a single application, offering simplicity, reliability, and security.
 
-The Ella Core operator for Kubernetes is a Juju charm allowing for day-1 and day-2 operations of Ella Core on Kubernetes.
+The Ella Core operator for Kubernetes is a Juju charm allowing lifecycle operations of Ella Core on Kubernetes.
 
 ## Getting Started
 
