@@ -6,11 +6,12 @@
 
 import json
 import logging
+import socket
+from datetime import timedelta
 from ipaddress import IPv4Address
 from subprocess import CalledProcessError, check_output
-from typing import List, Optional, Tuple
+from typing import FrozenSet, List, Optional
 
-from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.kubernetes_charm_libraries.v0.multus import (
     KubernetesMultusCharmLib,
     NetworkAnnotation,
@@ -19,9 +20,13 @@ from charms.kubernetes_charm_libraries.v0.multus import (
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointProvider,
 )
-from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
-from charms.sdcore_gnbsim_k8s.v0.fiveg_gnb_identity import (
-    GnbIdentityRequires,
+from charms.tls_certificates_interface.v4.tls_certificates import (
+    Certificate,
+    PrivateKey,
+    generate_ca,
+    generate_certificate,
+    generate_csr,
+    generate_private_key,
 )
 from jinja2 import Environment, FileSystemLoader
 from lightkube.models.meta_v1 import ObjectMeta
@@ -36,10 +41,10 @@ from ops import (
     main,
 )
 from ops.charm import CollectStatusEvent
-from ops.pebble import ConnectionError, ExecError, Layer
+from ops.model import SecretNotFoundError
+from ops.pebble import Layer, PathError
 
 from charm_config import CharmConfig, CharmConfigInvalidError
-from ella import Ella, GnodeB
 from kubernetes_ella import (
     AMFService,
     EBPFVolume,
@@ -47,26 +52,40 @@ from kubernetes_ella import (
 
 logger = logging.getLogger(__name__)
 
+PEER_RELATION_NAME = "core-peers"
 CONFIG_TEMPLATE_DIR_PATH = "src/templates/"
-CONFIG_FILE_PATH = "/etc/ella/ella.yaml"
-CONFIG_TEMPLATE_NAME = "ella.yaml.j2"
-N3_INTERFACE_BRIDGE_NAME = "access-br"
-N6_INTERFACE_BRIDGE_NAME = "core-br"
-N3_NETWORK_ATTACHMENT_DEFINITION_NAME = "n3-net"
-N6_NETWORK_ATTACHMENT_DEFINITION_NAME = "n6-net"
+CONFIG_PATH = "/etc/core"
+CONFIG_FILE_PATH = "/etc/core/core.yaml"
+CONFIG_TEMPLATE_NAME = "core.yaml.j2"
+N2_INTERFACE_BRIDGE_NAME = "n2-br"
+N3_INTERFACE_BRIDGE_NAME = "n3-br"
+N6_INTERFACE_BRIDGE_NAME = "n6-br"
+N2_NETWORK_ATTACHMENT_DEFINITION_NAME = "core-n2"
+N3_NETWORK_ATTACHMENT_DEFINITION_NAME = "core-n3"
+N6_NETWORK_ATTACHMENT_DEFINITION_NAME = "core-n6"
 N3_INTERFACE_NAME = "n3"
 N6_INTERFACE_NAME = "n6"
-DATABASE_RELATION_NAME = "database"
-DATABASE_NAME = "ella"
-NMS_PORT = 5000
-NGAPP_PORT = 38412
-N2_RELATION_NAME = "fiveg-n2"
-GNB_IDENTITY_RELATION_NAME = "fiveg_gnb_identity"
-PROMETHEUS_PORT = 8081
+N2_INTERFACE_NAME = "n2"
+N2_PORT = 38412
+API_INTERFACE_NAME = "eth0"
+API_PORT = 5002
+XDP_ATTACH_MODE = "generic"
+CA_SUBJECT = "core-ca"
+CA_CERTIFICATE_JUJU_SECRET_LABEL = "self-signed-ca-certificate"
 
 
 def render_config_file(
-    interfaces: List[str], n3_address: str, database_url: str, database_name: str
+    logging_level: str,
+    db_path: str,
+    n2_interface: str,
+    n2_port: int,
+    n3_interface: str,
+    n6_interface: str,
+    api_interface: str,
+    api_port: int,
+    api_tls_cert_path: str,
+    api_tls_key_path: str,
+    xdp_attach_mode: str,
 ) -> str:
     """Render the config file.
 
@@ -76,10 +95,17 @@ def render_config_file(
     jinja2_environment = Environment(loader=FileSystemLoader(CONFIG_TEMPLATE_DIR_PATH))
     template = jinja2_environment.get_template(CONFIG_TEMPLATE_NAME)
     content = template.render(
-        interfaces=interfaces,
-        n3_address=n3_address,
-        database_url=database_url,
-        database_name=database_name,
+        logging_level=logging_level,
+        db_path=db_path,
+        n2_interface=n2_interface,
+        n2_port=n2_port,
+        n3_interface=n3_interface,
+        n6_interface=n6_interface,
+        api_interface=api_interface,
+        api_port=api_port,
+        api_tls_cert_path=api_tls_cert_path,
+        api_tls_key_path=api_tls_key_path,
+        xdp_attach_mode=xdp_attach_mode,
     )
     return content
 
@@ -93,23 +119,71 @@ def get_pod_ip() -> Optional[str]:
         return None
 
 
+def generate_ca_certificate() -> tuple[str, str]:
+    """Generate CA certificates valid for 50 years.
+
+    Returns:
+        Tuple[str, str]: CA Private key, CA certificate
+    """
+    ca_private_key = generate_private_key()
+    ca_certificate = generate_ca(
+        private_key=ca_private_key,
+        common_name=CA_SUBJECT,
+        validity=timedelta(days=365 * 50),
+    )
+    return str(ca_private_key), str(ca_certificate)
+
+
+def generate_unit_certificate(
+    common_name: str,
+    sans_dns: FrozenSet[str],
+    ca_certificate: str,
+    ca_private_key: str,
+) -> tuple[str, str]:
+    """Generate unit certificates valid for 50 years.
+
+    Args:
+        common_name: Common name of the certificate
+        sans_ip: Subject alternative IP addresses of the certificate
+        sans_dns: Subject alternative names of the certificate
+        ca_certificate: CA certificate
+        ca_private_key: CA private key
+
+    Returns:
+        Tuple[str, str]: Private key, Certificate
+    """
+    unit_private_key = generate_private_key()
+    csr = generate_csr(
+        private_key=unit_private_key,
+        common_name=common_name,
+        sans_dns=sans_dns,
+    )
+    unit_certificate = generate_certificate(
+        ca=Certificate.from_string(ca_certificate),
+        ca_private_key=PrivateKey.from_string(ca_private_key),
+        csr=csr,
+        validity=timedelta(days=365 * 50),
+    )
+    return str(unit_private_key), str(unit_certificate)
+
+
+def existing_certificate_is_self_signed(ca_certificate: Certificate) -> bool:
+    """Return whether the certificate is a self signed certificate generated by the Vault charm."""
+    return ca_certificate.common_name == CA_SUBJECT
+
+
 class EllaK8SCharm(CharmBase):
     """Charm the service."""
 
     def __init__(self, framework: Framework):
         super().__init__(framework)
-        self._container_name = self._service_name = "ella"
+        self._container_name = self._service_name = "core"
         self.container = self.unit.get_container(self._container_name)
         try:
             self._charm_config: CharmConfig = CharmConfig.from_charm(charm=self)
         except CharmConfigInvalidError:
             logger.error("Invalid configuration")
             return
-        self._database = DatabaseRequires(
-            self, relation_name=DATABASE_RELATION_NAME, database_name=DATABASE_NAME
-        )
-        self.n2_provider = N2Provides(self, N2_RELATION_NAME)
-        self._gnb_identity = GnbIdentityRequires(self, GNB_IDENTITY_RELATION_NAME)
         self._kubernetes_multus = KubernetesMultusCharmLib(
             namespace=self.model.name,
             statefulset_name=self.model.app.name,
@@ -130,25 +204,21 @@ class EllaK8SCharm(CharmBase):
             namespace=self.model.name,
             name=f"{self.app.name}-external",
             app_name=self.app.name,
-            ngapp_port=NGAPP_PORT,
+            ngapp_port=N2_PORT,
         )
         self._metrics_endpoint = MetricsEndpointProvider(
             self,
             jobs=[
                 {
-                    "static_configs": [{"targets": [f"*:{PROMETHEUS_PORT}"]}],
+                    "static_configs": [{"targets": [f"*:{API_PORT}/api/v1/metrics"]}],
                 }
             ],
         )
-        self.ella = Ella(url=self._ella_endpoint)
-        self.unit.set_ports(NMS_PORT)
-        self.framework.observe(self._database.on.database_created, self._configure)
+        self.unit.set_ports(API_PORT)
         self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
         self.framework.observe(self.on.update_status, self._configure)
-        self.framework.observe(self.on["ella"].pebble_ready, self._configure)
+        self.framework.observe(self.on["core"].pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
-        self.framework.observe(self.on.fiveg_n2_relation_joined, self._configure)
-        self.framework.observe(self._gnb_identity.on.fiveg_gnb_identity_available, self._configure)
         self.framework.observe(self.on.remove, self._on_remove)
 
     def _on_collect_status(self, event: CollectStatusEvent):
@@ -156,11 +226,12 @@ class EllaK8SCharm(CharmBase):
         if not self.container.can_connect():
             event.add_status(WaitingStatus("waiting for Pebble API"))
             return
-        if missing_relations := self._missing_relations():
-            event.add_status(
-                BlockedStatus(f"Waiting for {', '.join(missing_relations)} relation(s)")
-            )
-            logger.info("Waiting for %s  relation(s)", ", ".join(missing_relations))
+        if not self._relation_created(PEER_RELATION_NAME):
+            event.add_status(WaitingStatus("Waiting for peer relation"))
+            logger.info("Waiting for peer relation")
+            return
+        if not self.container.exists(f"{CONFIG_PATH}/cert.pem"):
+            event.add_status(WaitingStatus("Waiting for certificates to be generated"))
             return
         if not self._kubernetes_multus.multus_is_available():
             event.add_status(BlockedStatus("Multus is not installed or enabled"))
@@ -169,10 +240,6 @@ class EllaK8SCharm(CharmBase):
         if not self._kubernetes_multus.is_ready():
             event.add_status(WaitingStatus("Waiting for Multus to be ready"))
             logger.info("Waiting for Multus to be ready")
-            return
-        if not self._database_is_available():
-            event.add_status(WaitingStatus("Waiting for the database to be available"))
-            logger.info("Waiting for the database to be available")
             return
         if not self._config_file_is_written():
             event.add_status(WaitingStatus("waiting for config file"))
@@ -200,27 +267,134 @@ class EllaK8SCharm(CharmBase):
         if not self.container.can_connect():
             logger.warning("Pebble API is not ready")
             return
-        if self._missing_relations():
-            logger.warning("Missing relations")
-            return
         if not self._kubernetes_multus.multus_is_available():
             logger.warning("Multus is not available")
-            return
-        if not self._database_is_available():
-            logger.warning("Database is not available")
             return
         self._kubernetes_multus.configure()
         self._configure_ebpf_volume()
         self._configure_amf_service()
-        self._configure_routes()
-        self._enable_ip_forwarding()
+        self._configure_self_signed_certificates()
         changed = self._configure_config_file()
         self._configure_pebble(restart=changed)
-        self._set_n2_information()
-        self._sync_gnbs()
 
     def _on_remove(self, _: EventBase):
         self._kubernetes_multus.remove()
+
+    def ca_certificate_secret_exists(self) -> bool:
+        """Return whether CA certificate is stored in secret."""
+        fields = ("privatekey", "certificate")
+        try:
+            secret = self.model.get_secret(label=CA_CERTIFICATE_JUJU_SECRET_LABEL)
+            secret_content = secret.get_content(refresh=True)
+            return all(secret_content.get(field) for field in fields)
+        except (SecretNotFoundError, ModelError):
+            return False
+
+    def pull_tls_file_from_workload(self, path: str) -> str:
+        """Get a file related to certs from the workload.
+
+        Args:
+            path: The path to the file in the workload
+
+        Returns:
+            str: The file content without whitespace
+                Or an empty string if the file does not exist.
+        """
+        try:
+            with self.container.pull(path) as file_content:
+                return file_content.read().strip()
+        except (PathError, FileNotFoundError):
+            return ""
+
+    def get_secret_content_values(
+        self,
+        *keys: str,
+        label: str,
+    ) -> tuple[str | None, ...]:
+        """Get secret content values by keys.
+
+        Args:
+            keys: Keys of the requested values
+            label: The secret label
+
+        Returns:
+            tuple[str | None, ...]: The secret content values,
+            if a key is not found, None is returned for its value
+
+        Raises:
+            TransientJujuError
+            NoSuchSecretError
+            SecretRemovedError
+        """
+        try:
+            secret = self.model.get_secret(label=label)
+            secret_content = secret.get_content(refresh=True)
+        except SecretNotFoundError:
+            logger.error("Secret %s not found", label)
+            return tuple(None for _ in keys)
+        for key in keys:
+            if key not in secret_content:
+                logger.warning("Secret %s does not have key %s", label or id, key)
+        return tuple(secret_content.get(key, None) for key in keys)
+
+    def _configure_self_signed_certificates(self) -> None:
+        """Configure the charm with self signed certificates."""
+        if not self.container.can_connect():
+            return
+        common_name = self.get_ingress_address()
+        if not common_name:
+            logger.debug("No ingress address found.")
+            return
+        if self.unit.is_leader() and not self.ca_certificate_secret_exists():
+            ca_private_key, ca_certificate = generate_ca_certificate()
+            content = {
+                "privatekey": ca_private_key,
+                "certificate": ca_certificate,
+            }
+            self.app.add_secret(content, label=CA_CERTIFICATE_JUJU_SECRET_LABEL)
+            logger.info("Generated CA certificate and saved it to Juju secret")
+        existing_ca_certificate = self.pull_tls_file_from_workload(f"{CONFIG_PATH}/ca.pem")
+        if existing_ca_certificate and existing_certificate_is_self_signed(
+            ca_certificate=Certificate.from_string(existing_ca_certificate)
+        ):
+            logger.debug("Found existing self signed certificate in workload")
+            return
+        if not self.ca_certificate_secret_exists():
+            logger.debug("No CA certificate found.")
+            return
+        ca_private_key, ca_certificate = self.get_secret_content_values(
+            "privatekey",
+            "certificate",
+            label=CA_CERTIFICATE_JUJU_SECRET_LABEL,
+        )
+        if not ca_certificate:
+            logger.debug("No CA certificate found.")
+            return
+        if not ca_private_key:
+            logger.debug("No CA private key found.")
+            return
+
+        unit_private_key, unit_certificate = generate_unit_certificate(
+            common_name=common_name,
+            sans_dns=frozenset([socket.getfqdn()]),
+            ca_certificate=ca_certificate,
+            ca_private_key=ca_private_key,
+        )
+        self.container.push(path=f"{CONFIG_PATH}/cert.pem", source=unit_certificate)
+        self.container.push(path=f"{CONFIG_PATH}/key.pem", source=unit_private_key)
+        self.container.push(path=f"{CONFIG_PATH}/ca.pem", source=ca_certificate)
+
+        logger.info("Generated and pushed unit certificates to workload")
+        if self._service_is_running():
+            self.container.restart(self._service_name)
+            logger.info("Restarted service")
+
+    def _service_is_running(self) -> bool:
+        """Return whether the service is running."""
+        try:
+            return self.container.get_service(self._service_name).is_running()
+        except ModelError:
+            return False
 
     def _configure_ebpf_volume(self):
         if not self._ebpf_volume.is_created():
@@ -230,25 +404,6 @@ class EllaK8SCharm(CharmBase):
         if not self.amf_service.is_created():
             self.amf_service.create()
 
-    def _configure_routes(self):
-        if not self._route_exists(
-            dst="default",
-            via=str(self._charm_config.n6_gateway_ip),
-        ):
-            self._create_default_route()
-        if not self._route_exists(
-            dst=str(self._charm_config.gnb_subnet),
-            via=str(self._charm_config.n3_gateway_ip),
-        ):
-            self._create_ran_route()
-
-    def _enable_ip_forwarding(self):
-        _, stderr = self._exec_command_in_workload(command="sysctl -w net.ipv4.ip_forward=1")
-        if stderr:
-            logger.error("Failed to enable ip forwarding: %s", stderr)
-            return
-        logger.info("IP forwarding enabled")
-
     def _configure_config_file(self):
         desired_config_file = self._generate_config_file()
         if self._is_config_update_required(desired_config_file):
@@ -256,125 +411,8 @@ class EllaK8SCharm(CharmBase):
             return True
         return False
 
-    @property
-    def _ella_endpoint(self) -> str:
-        return f"http://{get_pod_ip()}:{NMS_PORT}"
-
-    def _get_gnb_config_from_relations(self) -> List[GnodeB]:
-        gnb_name_tac_list = []
-        for gnb_identity_relation in self.model.relations.get(GNB_IDENTITY_RELATION_NAME, []):
-            if not gnb_identity_relation.app:
-                logger.warning(
-                    "Application missing from the %s relation data",
-                    GNB_IDENTITY_RELATION_NAME,
-                )
-                continue
-            gnb_name = gnb_identity_relation.data[gnb_identity_relation.app].get("gnb_name", "")
-            gnb_tac = gnb_identity_relation.data[gnb_identity_relation.app].get("tac", "")
-            if gnb_name and gnb_tac:
-                gnb_name_tac_list.append(GnodeB(name=gnb_name, tac=int(gnb_tac)))
-        return gnb_name_tac_list
-
-    def _sync_gnbs(self) -> None:
-        """Sync the GNBs between the inventory and the relations."""
-        inventory_gnb_list = self.ella.list_gnbs()
-        relation_gnb_list = self._get_gnb_config_from_relations()
-        for relation_gnb in relation_gnb_list:
-            if relation_gnb not in inventory_gnb_list:
-                self.ella.create_gnb(name=relation_gnb.name, tac=relation_gnb.tac)
-        for inventory_gnb in inventory_gnb_list:
-            if inventory_gnb not in relation_gnb_list:
-                self.ella.delete_gnb(name=inventory_gnb.name)
-
-    def _set_n2_information(self) -> None:
-        if not self._relation_created(N2_RELATION_NAME):
-            return
-        if not self._service_is_running():
-            return
-        load_balancer_ip, load_balancer_hostname = self.amf_service.get_info()
-        self.n2_provider.set_n2_information(
-            amf_ip_address=load_balancer_ip,
-            amf_hostname=load_balancer_hostname if load_balancer_hostname else self._hostname(),
-            amf_port=NGAPP_PORT,
-        )
-        logger.info("N2 information set in relation")
-
-    def _hostname(self) -> str:
-        """Build and returns the AMF hostname in the cluster."""
-        return f"{self.model.app.name}-external.{self.model.name}.svc.cluster.local"
-
-    def _service_is_running(self) -> bool:
-        if not self.container.can_connect():
-            return False
-        try:
-            service = self.container.get_service(self._service_name)
-        except ModelError:
-            return False
-        return service.is_running()
-
-    def _missing_relations(self) -> List[str]:
-        missing_relations = []
-        for relation in [DATABASE_RELATION_NAME]:
-            if not self._relation_created(relation):
-                missing_relations.append(relation)
-        return missing_relations
-
     def _relation_created(self, relation_name: str) -> bool:
         return bool(self.model.relations.get(relation_name))
-
-    def _database_is_available(self) -> bool:
-        return self._database.is_resource_created()
-
-    def _route_exists(self, dst: str, via: str | None) -> bool:
-        """Return whether the specified route exist."""
-        stdout, stderr = self._exec_command_in_workload(command="ip route show")
-        if stderr:
-            logger.error("Failed to get route information: %s", stderr)
-            return False
-        for line in stdout.splitlines():
-            if f"{dst} via {via}" in line:
-                return True
-        return False
-
-    def _create_default_route(self) -> None:
-        """Create ip route towards core network."""
-        _, stderr = self._exec_command_in_workload(
-            command=f"ip route replace default via {self._charm_config.n6_gateway_ip} metric 110"
-        )
-        if stderr:
-            logger.error("Failed to create default route (ExecError)")
-            return
-        logger.info("Default core network route created")
-
-    def _create_ran_route(self) -> None:
-        """Create ip route towards gnb-subnet."""
-        _, stderr = self._exec_command_in_workload(
-            command=f"ip route replace {self._charm_config.gnb_subnet} via {self._charm_config.n3_gateway_ip}"
-        )
-        if stderr:
-            logger.error("Failed to create route to gnb-subnet (ExecError)")
-            return
-        logger.info("Route to gnb-subnet created")
-
-    def _exec_command_in_workload(
-        self, command: str, timeout: Optional[int] = 30, environment: Optional[dict] = None
-    ) -> Tuple[str, str | None]:
-        try:
-            process = self.container.exec(
-                command=command.split(),
-                timeout=timeout,
-                environment=environment,
-            )
-        except ExecError:
-            logger.error("Failed executing command in workload (ExecError): %s", command)
-            return "", "ExecError"
-        except FileNotFoundError:
-            logger.error("Failed executing command in workload (FileNotFoundError): %s", command)
-            return "", "FileNotFoundError"
-        except ConnectionError:
-            logger.error("Failed executing command in workload (ConnectionError): %s", command)
-            return "", "ConnectionError"
-        return process.wait_output()
 
     def _configure_pebble(self, restart=False) -> None:
         """Configure the Pebble layer.
@@ -384,16 +422,20 @@ class EllaK8SCharm(CharmBase):
         """
         plan = self.container.get_plan()
         if plan.services != self._pebble_layer.services:
-            self.container.add_layer("ella", self._pebble_layer, combine=True)
+            self.container.add_layer(self._service_name, self._pebble_layer, combine=True)
             self.container.replan()
             logger.info("New layer added: %s", self._pebble_layer)
         if restart:
-            self.container.restart("ella")
+            self.container.restart(self._service_name)
             logger.info("Restarted container ")
             return
         self.container.replan()
 
     def _generate_network_annotations(self) -> List[NetworkAnnotation]:
+        n2_network_annotation = NetworkAnnotation(
+            name=N2_NETWORK_ATTACHMENT_DEFINITION_NAME,
+            interface=N2_INTERFACE_NAME,
+        )
         n3_network_annotation = NetworkAnnotation(
             name=N3_NETWORK_ATTACHMENT_DEFINITION_NAME,
             interface=N3_INTERFACE_NAME,
@@ -402,15 +444,27 @@ class EllaK8SCharm(CharmBase):
             name=N6_NETWORK_ATTACHMENT_DEFINITION_NAME,
             interface=N6_INTERFACE_NAME,
         )
-        return [n3_network_annotation, n6_network_annotation]
+        return [n2_network_annotation, n3_network_annotation, n6_network_annotation]
 
     def _network_attachment_definitions_from_config(self) -> List[NetworkAttachmentDefinition]:
+        n2_nad_config = {
+            "cniVersion": "0.3.1",
+            "ipam": {
+                "type": "static",
+                "addresses": [
+                    {"address": self._charm_config.n2_ip},
+                ],
+            },
+            "capabilities": {"mac": True},
+            "type": "bridge",
+            "bridge": N2_INTERFACE_BRIDGE_NAME,
+        }
         n3_nad_config = {
             "cniVersion": "0.3.1",
             "ipam": {
                 "type": "static",
                 "addresses": [
-                    {"address": f"{self._charm_config.n3_ip}/24"},
+                    {"address": self._charm_config.n3_ip},
                 ],
             },
             "capabilities": {"mac": True},
@@ -422,14 +476,17 @@ class EllaK8SCharm(CharmBase):
             "ipam": {
                 "type": "static",
                 "addresses": [
-                    {"address": f"{self._charm_config.n6_ip}/24"},
+                    {"address": self._charm_config.n6_ip},
                 ],
             },
             "capabilities": {"mac": True},
             "type": "bridge",
             "bridge": N6_INTERFACE_BRIDGE_NAME,
         }
-
+        n2_nad = NetworkAttachmentDefinition(
+            metadata=ObjectMeta(name=(N2_NETWORK_ATTACHMENT_DEFINITION_NAME)),
+            spec={"config": json.dumps(n2_nad_config)},
+        )
         n3_nad = NetworkAttachmentDefinition(
             metadata=ObjectMeta(name=(N3_NETWORK_ATTACHMENT_DEFINITION_NAME)),
             spec={"config": json.dumps(n3_nad_config)},
@@ -438,20 +495,22 @@ class EllaK8SCharm(CharmBase):
             metadata=ObjectMeta(name=(N6_NETWORK_ATTACHMENT_DEFINITION_NAME)),
             spec={"config": json.dumps(n6_nad_config)},
         )
-        return [n3_nad, n6_nad]
+        return [n2_nad, n3_nad, n6_nad]
 
     def _generate_config_file(self) -> str:
         return render_config_file(
-            interfaces=self._charm_config.interfaces,
-            n3_address=str(self._charm_config.n3_ip),
-            database_url=self._get_database_info()["uris"].split(",")[0],
-            database_name=DATABASE_NAME,
+            logging_level=self._charm_config.logging_level,
+            db_path=f"{CONFIG_PATH}/core.db",
+            n2_interface=N2_INTERFACE_NAME,
+            n2_port=N2_PORT,
+            n3_interface=N3_INTERFACE_NAME,
+            n6_interface=N6_INTERFACE_NAME,
+            api_interface=API_INTERFACE_NAME,
+            api_port=API_PORT,
+            api_tls_cert_path=f"{CONFIG_PATH}/cert.pem",
+            api_tls_key_path=f"{CONFIG_PATH}/key.pem",
+            xdp_attach_mode=XDP_ATTACH_MODE,
         )
-
-    def _get_database_info(self) -> dict:
-        if not self._database_is_available():
-            raise RuntimeError(f"Database `{DATABASE_NAME}` is not available")
-        return self._database.fetch_relation_data()[self._database.relations[0].id]
 
     def _is_config_update_required(self, content: str) -> bool:
         if not self._config_file_is_written() or not self._config_file_content_matches(
@@ -480,13 +539,13 @@ class EllaK8SCharm(CharmBase):
         """Return a dictionary representing a Pebble layer."""
         return Layer(
             {
-                "summary": "ella layer",
-                "description": "pebble config layer for ella",
+                "summary": "Ella Core layer",
+                "description": "pebble config layer for Ella Core",
                 "services": {
-                    "ella": {
+                    "core": {
                         "override": "replace",
-                        "summary": "ella",
-                        "command": "ella --config /etc/ella/ella.yaml",
+                        "summary": "Ella Core Service",
+                        "command": "core --config /etc/core/core.yaml",
                         "startup": "enabled",
                     }
                 },
@@ -501,6 +560,19 @@ class EllaK8SCharm(CharmBase):
             str: A string containing the name of the current unit's pod.
         """
         return "-".join(self.model.unit.name.rsplit("/", 1))
+
+    def get_ingress_address(self) -> str | None:
+        """Get the ingress address for the given relation."""
+        relations = self.model.relations.get(PEER_RELATION_NAME, [])
+        if not relations:
+            return None
+        if len(relations) > 1:
+            logger.warning("More than one relation found")
+        relation = relations[0]
+        binding = self.model.get_binding(relation)
+        if not binding or not binding.network.ingress_address:
+            return None
+        return str(binding.network.ingress_address)
 
 
 if __name__ == "__main__":  # pragma: nocover

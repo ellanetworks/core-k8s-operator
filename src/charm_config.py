@@ -1,12 +1,11 @@
-# Copyright 2024 Canonical Ltd.
+# Copyright 2024 Guillaume Belanger
 # See LICENSE file for licensing details.
 
 """Config of the Charm."""
 
 import dataclasses
 import logging
-from ipaddress import IPv4Address, IPv4Network
-from typing import List
+from typing import cast
 
 import ops
 from pydantic import (
@@ -40,26 +39,20 @@ class EllaConfig(BaseModel):
 
     model_config = ConfigDict(alias_generator=to_kebab, use_enum_values=True)
 
-    interfaces: List[str] = ["n3", "n6"]
     logging_level: str = "info"
-    gnb_subnet: IPv4Network = IPv4Network("192.168.251.0/24")
-    n3_ip: IPv4Address = IPv4Address("192.168.252.3")
-    n3_gateway_ip: IPv4Address = IPv4Address("192.168.252.1")
-    n6_ip: IPv4Address = IPv4Address("192.168.250.3")
-    n6_gateway_ip: IPv4Address = IPv4Address("192.168.250.1")
+    n2_ip: str = "192.168.253.3/24"
+    n3_ip: str = "192.168.252.3/24"
+    n6_ip: str = "192.168.250.3/24"
 
 
 @dataclasses.dataclass
 class CharmConfig:
     """Represent the configuration of the charm."""
 
-    interfaces: List[str]
     logging_level: str
-    gnb_subnet: IPv4Network
-    n3_ip: IPv4Address
-    n3_gateway_ip: IPv4Address
-    n6_ip: IPv4Address
-    n6_gateway_ip: IPv4Address
+    n2_ip: str
+    n3_ip: str
+    n6_ip: str
 
     def __init__(self, *, ella_config: EllaConfig):
         """Initialize a new instance of the CharmConfig class.
@@ -67,13 +60,10 @@ class CharmConfig:
         Args:
             ella_config: Ella operator configuration.
         """
-        self.interfaces = ella_config.interfaces
         self.logging_level = ella_config.logging_level
-        self.gnb_subnet = ella_config.gnb_subnet
+        self.n2_ip = ella_config.n2_ip
         self.n3_ip = ella_config.n3_ip
-        self.n3_gateway_ip = ella_config.n3_gateway_ip
         self.n6_ip = ella_config.n6_ip
-        self.n6_gateway_ip = ella_config.n6_gateway_ip
 
     @classmethod
     def from_charm(
@@ -84,19 +74,12 @@ class CharmConfig:
         try:
             # ignoring because mypy fails with:
             # "has incompatible type "**dict[str, str]"; expected ...""
-            interfaces = str(charm.config.get("interfaces", "[n3,n6]"))
             return cls(
                 ella_config=EllaConfig(
-                    interfaces=interfaces.replace(" ", "")
-                    .replace("[", "")
-                    .replace("]", "")
-                    .split(","),
                     logging_level=str(charm.config.get("logging_level", "info")),
-                    gnb_subnet=IPv4Network(charm.config.get("gnb_subnet", "192.168.251.0/24")),
-                    n3_ip=IPv4Address(charm.config.get("n3_ip", "192.168.252.3")),
-                    n3_gateway_ip=IPv4Address(charm.config.get("n3_gateway_ip", "192.168.252.1")),
-                    n6_ip=IPv4Address(charm.config.get("n6_ip", "192.168.250.3")),
-                    n6_gateway_ip=IPv4Address(charm.config.get("n6_gateway_ip", "192.168.250.1")),
+                    n2_ip=cast(str, charm.config.get("n2-ip", "192.168.253.3/24")),
+                    n3_ip=cast(str, charm.config.get("n3-ip", "192.168.252.3/24")),
+                    n6_ip=cast(str, charm.config.get("n6-ip", "192.168.250.3/24")),
                 )
             )
         except ValidationError as exc:
