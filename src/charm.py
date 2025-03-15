@@ -6,7 +6,10 @@
 
 import json
 import logging
+import secrets
 import socket
+import string
+from dataclasses import dataclass
 from datetime import timedelta
 from ipaddress import IPv4Address
 from subprocess import CalledProcessError, check_output
@@ -21,6 +24,7 @@ from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointProvider,
 )
 from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
+from charms.sdcore_nms_k8s.v0.fiveg_core_gnb import FivegCoreGnbProvides, PLMNConfig
 from charms.tls_certificates_interface.v4.tls_certificates import (
     Certificate,
     PrivateKey,
@@ -46,6 +50,7 @@ from ops.model import SecretNotFoundError
 from ops.pebble import Layer, PathError
 
 from charm_config import CharmConfig, CharmConfigInvalidError
+from core import EllaCore
 from kubernetes_ella import (
     AMFService,
     EBPFVolume,
@@ -74,6 +79,27 @@ XDP_ATTACH_MODE = "generic"
 CA_SUBJECT = "core-ca"
 CA_CERTIFICATE_JUJU_SECRET_LABEL = "self-signed-ca-certificate"
 N2_RELATION_NAME = "fiveg-n2"
+FIVEG_CORE_GNB_RELATION_NAME = "fiveg_core_gnb"
+ELLA_CORE_LOGIN_SECRET_LABEL = "CORE_LOGIN"
+CA_CERTIFICATE_CHARM_PATH = "/var/lib/juju/storage/config/0/ca.pem"
+CHARM_USER_EMAIL = "charm@ellanetworks.com"
+
+
+@dataclass
+class LoginSecret:
+    """The format of the secret for the login details that are required to login to Ella Core."""
+
+    email: str
+    password: str
+    token: str | None
+
+    def to_dict(self) -> dict[str, str]:
+        """Return a dict version of the secret."""
+        return {
+            "email": self.email,
+            "password": self.password,
+            "token": self.token if self.token else "",
+        }
 
 
 def render_config_file(
@@ -186,6 +212,7 @@ class EllaK8SCharm(CharmBase):
         except CharmConfigInvalidError:
             logger.error("Invalid configuration")
             return
+        self._fiveg_core_gnb_provider = FivegCoreGnbProvides(self, FIVEG_CORE_GNB_RELATION_NAME)
         self.n2_provider = N2Provides(self, N2_RELATION_NAME)
         self._kubernetes_multus = KubernetesMultusCharmLib(
             namespace=self.model.name,
@@ -224,6 +251,10 @@ class EllaK8SCharm(CharmBase):
         self.framework.observe(self.on["core"].pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
         self.framework.observe(self.on.remove, self._on_remove)
+        self._ella_core = EllaCore(
+            url=f"https://{socket.getfqdn()}:{API_PORT}",
+            ca_certificate_path=CA_CERTIFICATE_CHARM_PATH,
+        )
 
     def _on_collect_status(self, event: CollectStatusEvent):
         """Handle the collect status event."""
@@ -281,9 +312,76 @@ class EllaK8SCharm(CharmBase):
         self._configure_self_signed_certificates()
         changed = self._configure_config_file()
         self._configure_pebble(restart=changed)
+        self._sync_network_config()
 
     def _on_remove(self, _: EventBase):
         self._kubernetes_multus.remove()
+
+    def _sync_network_config(self):
+        """Synchronize network configuration between the Core and the RAN."""
+        login_details = self._get_admin_account()
+        if not login_details or not login_details.token:
+            logger.warning("Failed to get admin account details")
+            return []
+        self._ella_core.set_token(login_details.token)
+        operator = self._ella_core.get_operator()
+        for relation in self.model.relations.get(FIVEG_CORE_GNB_RELATION_NAME, []):
+            if not relation.app:
+                logger.warning(
+                    "Application missing from the %s relation data",
+                    FIVEG_CORE_GNB_RELATION_NAME,
+                )
+                continue
+            self._fiveg_core_gnb_provider.publish_gnb_config_information(
+                relation_id=relation.id,
+                tac=int(operator.tracking.supported_tacs[0]),
+                plmns=[
+                    PLMNConfig(
+                        mcc=operator.id.mcc,
+                        mnc=operator.id.mnc,
+                        sst=operator.slice.sst,
+                        sd=operator.slice.sd,
+                    )
+                ],
+            )
+
+    def _create_admin_account_if_does_not_exist(self) -> None:
+        """Create the first admin and store the credentials in a secret if it does not exist."""
+        if not self._ella_core.is_api_available():
+            return
+        account = self._get_admin_account()
+        if not account:
+            email = CHARM_USER_EMAIL
+            password = _generate_password()
+            account = LoginSecret(email, password, None)
+            self.app.add_secret(
+                label=ELLA_CORE_LOGIN_SECRET_LABEL,
+                content=account.to_dict(),
+            )
+            logger.info("admin account details saved to secrets.")
+        if not self._ella_core.is_initialized():
+            self._ella_core.create_user(
+                email=account.email,
+                password=account.password,
+                role="admin",
+            )
+
+    def _get_admin_account(self) -> LoginSecret | None:
+        """Get the Ella Core admin user credentials from secrets.
+
+        Returns:
+            Login details secret if they exist. None if the secret does not exist.
+        """
+        try:
+            secret = self.model.get_secret(label=ELLA_CORE_LOGIN_SECRET_LABEL)
+            secret_content = secret.get_content(refresh=True)
+            email = secret_content.get("email", "")
+            password = secret_content.get("password", "")
+            token = secret_content.get("token")
+            return LoginSecret(email, password, token)
+        except SecretNotFoundError:
+            logger.info("Core login secret not found.")
+            return None
 
     def _set_n2_information(self) -> None:
         """Set N2 information for the N2 relation."""
@@ -593,6 +691,18 @@ class EllaK8SCharm(CharmBase):
         if not binding or not binding.network.ingress_address:
             return None
         return str(binding.network.ingress_address)
+
+
+def _generate_password() -> str:
+    """Generate a password using the secrets library."""
+    pw = []
+    pw.append(secrets.choice(string.ascii_lowercase))
+    pw.append(secrets.choice(string.ascii_uppercase))
+    pw.append(secrets.choice(string.digits))
+    for i in range(8):
+        pw.append(secrets.choice(string.ascii_letters + string.digits))
+    secrets.SystemRandom().shuffle(pw)
+    return "".join(pw)
 
 
 if __name__ == "__main__":  # pragma: nocover

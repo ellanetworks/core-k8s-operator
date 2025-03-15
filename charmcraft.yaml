@@ -86,6 +86,8 @@ provides:
     interface: prometheus_scrape
   fiveg-n2:
     interface: fiveg_n2
+  fiveg_core_gnb:
+    interface: fiveg_core_gnb
 
 peers:
   core-peers:

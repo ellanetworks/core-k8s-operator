@@ -31,5 +31,30 @@ juju add-model dev
 Deploy Ella Core
 
 ```bash
-juju deploy ella-core-k8s --trust --channel=edge
+juju deploy ella-core-k8s ella-core --channel=edge --trust
 ```
+
+Wait for the application to be running. You can check the status with `juju status`.
+
+```bash
+guillaume@courge:~/code/core-k8s-operator$ juju status
+Model  Controller     Cloud/Region   Version  SLA          Timestamp
+dev1   k8s-localhost  k8s-localhost  3.6.4    unsupported  11:13:32-04:00
+
+App            Version  Status  Scale  Charm          Channel  Rev  Address         Exposed  Message
+ella-core-k8s           active      1  ella-core-k8s             0  10.152.183.149  no       
+
+Unit              Workload  Agent  Address     Ports  Message
+ella-core-k8s/0*  active    idle   10.1.0.117 
+```
+
+Deploy the gNodeB simulator and a router, and integrate the gNodeB simulator with Ella Core:
+
+```bash
+juju deploy sdcore-router-k8s router --channel=1.5/stable --trust
+juju deploy sdcore-gnbsim-k8s gnbsim --channel=1.6/edge --trust
+juju integrate ella-core:fiveg-n2 gnbsim:fiveg-n2
+juju integrate ella-core:fiveg_core_gnb gnbsim:fiveg_core_gnb
+```
+
+Wait for the application to be running. You can check the status with `juju status`.
