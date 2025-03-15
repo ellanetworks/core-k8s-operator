@@ -1,7 +1,9 @@
 # Contributing
+
 To make contributions to this charm, you'll need a working Juju development setup.
 
 ## Prerequisites
+
 Install Charmcraft and LXD:
 ```shell
 sudo snap install --classic charmcraft
@@ -11,18 +13,19 @@ newgrp lxd
 lxd init --auto
 ```
 
-Install MicroK8s:
+Install Canonical Kubernetes and Multus:
 ```shell
-sudo snap install microk8s --channel=1.32-strict/stable
-sudo usermod -a -G snap_microk8s $USER
-newgrp snap_microk8s
-sudo microk8s enable hostpath-storage
+sudo snap install k8s --classic --channel=1.32-classic/stable
+sudo k8s bootstrap
+sudo k8s kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
 ```
 
-Install Juju and bootstrap a controller on the MicroK8S instance:
-```shell
-sudo snap install juju --channel=3.6/stable
-juju bootstrap microk8s
+Install Juju and bootstrap a Juju controller
+
+```bash
+sudo snap install juju --channel=3/stable
+juju add-k8s k8s-localhost
+juju bootstrap k8s-localhost
 ```
 
 This project uses `uv`. You can install it on Ubuntu with:
@@ -39,6 +42,7 @@ source .venv/bin/activate
 ```
 
 ## Testing
+
 This project uses `tox` for managing test environments. It can be installed
 with:
 
@@ -61,6 +65,7 @@ Integration tests require the charm to be built with `charmcraft pack` first.
 ```
 
 ## Build
+
 Go to the charm directory and run:
 ```bash
 charmcraft pack

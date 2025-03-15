@@ -31,6 +31,9 @@ jobs:
         id: charm-path
         run: echo "charm_path=$(find built/ -name '*.charm' -type f -print)" >> $GITHUB_OUTPUT
       
+      - name: Remove /run/containerd directory
+        run: sudo rm -rf /run/containerd
+      
       - name: Install Canonical K8s and Multus
         run: |
           sudo snap install k8s --classic --channel=1.32-classic/stable
@@ -45,8 +48,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          tox -e integration -- \
-            --charm_path="${{ steps.charm-path.outputs.charm_path }}" \
+          tox -e integration -- --charm_path="${{ steps.charm-path.outputs.charm_path }}"
 
       - name: Archive charmcraft logs
         if: failure()

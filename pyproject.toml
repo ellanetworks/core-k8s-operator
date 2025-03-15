@@ -7,10 +7,8 @@ dependencies = [
     "cosl",
     "cryptography",
     "jinja2",
-    "jsonschema",
     "ops",
-    "pydantic<3.0",
-    "pytest-interface-tester",
+    "pydantic",
     "rpds-py==0.23.1",
 ]
 
