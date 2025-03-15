@@ -41,13 +41,13 @@ jobs:
           sudo k8s kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
       
       - name: Install Juju and bootstrap controller
-        continue-on-error: true
         run: |
           sudo snap install juju --channel 3/stable
           juju add-k8s k8s-localhost
           juju bootstrap k8s-localhost
       
       - name: Check k8s status
+        if: failure()
         run: |
           sudo k8s status
 
