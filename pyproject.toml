@@ -16,11 +16,13 @@ dependencies = [
 test = [
     "coverage[toml]",
     "juju>=3.6.1.0",
+    "ops[testing] ~= 2.17",
     "pytest",
     "pytest-operator",
     "pytest-asyncio<0.23",
 ]
 dev = [
+    "ops[testing] ~= 2.17",
     "codespell",
     "pyright",
     "ruff",

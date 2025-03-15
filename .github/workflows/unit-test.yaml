@@ -9,9 +9,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-    
-    - name: Remove /run/containerd directory
-      run: sudo rm -rf /run/containerd
 
     - name: Install uv
       run: sudo snap install --classic astral-uv

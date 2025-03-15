@@ -276,12 +276,14 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "codespell" },
+    { name = "ops", extra = ["testing"] },
     { name = "pyright" },
     { name = "ruff" },
 ]
 test = [
     { name = "coverage", extra = ["toml"] },
     { name = "juju" },
+    { name = "ops", extra = ["testing"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-operator" },
@@ -300,12 +302,14 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "codespell" },
+    { name = "ops", extras = ["testing"], specifier = "~=2.17" },
     { name = "pyright" },
     { name = "ruff" },
 ]
 test = [
     { name = "coverage", extras = ["toml"] },
     { name = "juju", specifier = ">=3.6.1.0" },
+    { name = "ops", extras = ["testing"], specifier = "~=2.17" },
     { name = "pytest" },
     { name = "pytest-asyncio", specifier = "<0.23" },
     { name = "pytest-operator" },
@@ -840,6 +844,24 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a2/40/9a32cc6f5d5086389c361f41add012ab52e031c54a7b85d1e91c7f87e834/ops-2.19.4.tar.gz", hash = "sha256:3d6ef474341abaa86ef9ed7dc21e6292a1d690546ec830d4458d56f6eb4af350", size = 485366 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f9/e2/e5161a0789103323fbc65938c3b4368cde31b687fa38f1122eb599d5612b/ops-2.19.4-py3-none-any.whl", hash = "sha256:ca23c62441576e0e25a33eb8e3c6c3583b77c5954913f7a682b3b002b0858519", size = 178701 },
+]
+
+[package.optional-dependencies]
+testing = [
+    { name = "ops-scenario" },
+]
+
+[[package]]
+name = "ops-scenario"
+version = "7.19.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ops" },
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3f/85/ff4e8b7dc54f06a43fe6dfd91c517141cfe03806b363b36d9640604a6d2b/ops_scenario-7.19.4.tar.gz", hash = "sha256:e33b1578bee513fce03fc2323e6f1f409fbff53e1e980aec1cb747f5463b2c57", size = 134184 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/0e/4017656cbb0bd47379d9b3ee73ca1f3b107e2c7a5bd07a77d71b5b81fe59/ops_scenario-7.19.4-py3-none-any.whl", hash = "sha256:1168daa9a9c6f67806d2e74562e89585fc86b0d52c4b7ebb457e04dcfbe42099", size = 70017 },
 ]
 
 [[package]]
