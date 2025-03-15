@@ -20,6 +20,7 @@ from charms.kubernetes_charm_libraries.v0.multus import (
 from charms.prometheus_k8s.v0.prometheus_scrape import (
     MetricsEndpointProvider,
 )
+from charms.sdcore_amf_k8s.v0.fiveg_n2 import N2Provides
 from charms.tls_certificates_interface.v4.tls_certificates import (
     Certificate,
     PrivateKey,
@@ -72,6 +73,7 @@ API_PORT = 5002
 XDP_ATTACH_MODE = "generic"
 CA_SUBJECT = "core-ca"
 CA_CERTIFICATE_JUJU_SECRET_LABEL = "self-signed-ca-certificate"
+N2_RELATION_NAME = "fiveg-n2"
 
 
 def render_config_file(
@@ -184,6 +186,7 @@ class EllaK8SCharm(CharmBase):
         except CharmConfigInvalidError:
             logger.error("Invalid configuration")
             return
+        self.n2_provider = N2Provides(self, N2_RELATION_NAME)
         self._kubernetes_multus = KubernetesMultusCharmLib(
             namespace=self.model.name,
             statefulset_name=self.model.app.name,
@@ -216,6 +219,7 @@ class EllaK8SCharm(CharmBase):
         )
         self.unit.set_ports(API_PORT)
         self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
+        self.framework.observe(self.on.fiveg_n2_relation_joined, self._configure)
         self.framework.observe(self.on.update_status, self._configure)
         self.framework.observe(self.on["core"].pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
@@ -270,6 +274,7 @@ class EllaK8SCharm(CharmBase):
         if not self._kubernetes_multus.multus_is_available():
             logger.warning("Multus is not available")
             return
+        self._set_n2_information()
         self._kubernetes_multus.configure()
         self._configure_ebpf_volume()
         self._configure_amf_service()
@@ -279,6 +284,21 @@ class EllaK8SCharm(CharmBase):
 
     def _on_remove(self, _: EventBase):
         self._kubernetes_multus.remove()
+
+    def _set_n2_information(self) -> None:
+        """Set N2 information for the N2 relation."""
+        if not self._relation_created(N2_RELATION_NAME):
+            return
+        if not self._service_is_running():
+            return
+        amf_service_ip, amf_service_hostname = self.amf_service.get_info()
+        if not amf_service_ip or not amf_service_hostname:
+            return
+        self.n2_provider.set_n2_information(
+            amf_ip_address=amf_service_ip,
+            amf_hostname=amf_service_hostname,
+            amf_port=N2_PORT,
+        )
 
     def ca_certificate_secret_exists(self) -> bool:
         """Return whether CA certificate is stored in secret."""
