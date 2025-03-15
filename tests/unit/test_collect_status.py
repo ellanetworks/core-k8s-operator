@@ -63,7 +63,7 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
                 can_connect=True,
                 mounts={
                     "cert": testing.Mount(location="/etc/core/cert.pem", source=local_file.name),
-                    "key": testing.Mount(location="/etc/core/key.pem", source=local_file.name)
+                    "key": testing.Mount(location="/etc/core/key.pem", source=local_file.name),
                 },
             )
 
@@ -75,7 +75,7 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
             state_out = self.ctx.run(self.ctx.on.collect_unit_status(), state_in)
 
             assert state_out.unit_status == WaitingStatus("waiting for config file")
-    
+
     def test_given_config_file_exists_when_collect_unit_status_then_activestatus(
         self,
     ):
@@ -86,7 +86,9 @@ class TestCharmCollectStatus(EllaUnitTestFixtures):
                 mounts={
                     "cert": testing.Mount(location="/etc/core/cert.pem", source=local_file.name),
                     "key": testing.Mount(location="/etc/core/key.pem", source=local_file.name),
-                    "config": testing.Mount(location="/etc/core/core.yaml", source=local_file.name)
+                    "config": testing.Mount(
+                        location="/etc/core/core.yaml", source=local_file.name
+                    ),
                 },
             )
 

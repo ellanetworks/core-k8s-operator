@@ -5,6 +5,7 @@
 
 import dataclasses
 import logging
+from typing import cast
 
 import ops
 from pydantic import (
@@ -76,9 +77,9 @@ class CharmConfig:
             return cls(
                 ella_config=EllaConfig(
                     logging_level=str(charm.config.get("logging_level", "info")),
-                    n2_ip=charm.config.get("n2-ip", "192.168.253.3/24"),
-                    n3_ip=charm.config.get("n3-ip", "192.168.252.3/24"),
-                    n6_ip=charm.config.get("n6-ip", "192.168.250.3/24"),
+                    n2_ip=cast(str, charm.config.get("n2-ip", "192.168.253.3/24")),
+                    n3_ip=cast(str, charm.config.get("n3-ip", "192.168.252.3/24")),
+                    n6_ip=cast(str, charm.config.get("n6-ip", "192.168.250.3/24")),
                 )
             )
         except ValidationError as exc:
