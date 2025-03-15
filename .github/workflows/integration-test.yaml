@@ -35,7 +35,9 @@ jobs:
         run: |
           sudo rm -rf /run/containerd
           sudo snap install k8s --classic --channel=1.32-classic/stable
+          sleep 5
           sudo k8s bootstrap --timeout=5m
+          sleep 5
           sudo k8s kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
       
       - name: Install Juju and bootstrap controller
