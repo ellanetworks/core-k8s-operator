@@ -316,12 +316,12 @@ class EllaK8SCharm(CharmBase):
         changed = self._configure_config_file()
         self._configure_pebble(restart=changed)
         self._create_admin_account_if_does_not_exist()
-        self._sync_network_config()
+        self._set_gnb_information()
 
     def _on_remove(self, _: EventBase):
         self._kubernetes_multus.remove()
 
-    def _sync_network_config(self):
+    def _set_gnb_information(self):
         """Synchronize network configuration between the Core and the RAN."""
         login_details = self._get_admin_account()
         if not login_details or not login_details.token:
@@ -397,23 +397,23 @@ class EllaK8SCharm(CharmBase):
         amf_service_ip, _ = self.amf_service.get_info()
         if amf_service_ip:
             return amf_service_ip
-        return self._charm_config.n2_ip
+        return self._charm_config.n2_ip.split("/")[0]
 
     def _set_n2_information(self) -> None:
         """Set N2 information for the N2 relation."""
         if not self._relation_created(N2_RELATION_NAME):
-            logger.info("TO DELETE: N2 relation not created")
+            logger.warning("TO DELETE: N2 relation not created")
             return
         if not self._service_is_running():
-            logger.info("TO DELETE: Service is not running")
+            logger.warning("TO DELETE: Service is not running")
             return
         n2_amf_ip = self._get_n2_amf_ip()
         n2_amf_hostname = self._get_n2_amf_hostname()
         if not n2_amf_ip:
-            logger.info("TO DELETE: N2 AMF IP not found")
+            logger.warning("TO DELETE: N2 AMF IP not found")
             return
         if not n2_amf_hostname:
-            logger.info("TO DELETE: N2 AMF hostname not found")
+            logger.warning("TO DELETE: N2 AMF hostname not found")
             return
         self.n2_provider.set_n2_information(
             amf_ip_address=n2_amf_ip,

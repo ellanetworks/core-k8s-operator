@@ -141,7 +141,6 @@ class EllaCore:
             if not result:
                 logger.error("Failed to login to Ella Core.")
                 return None
-            logger.info("TO DELETE: Response from Ella Core: %s", response)
             initialized = result.get("initialized", False)
             version = result.get("version", "")
             return StatusResponse(initialized=initialized, version=version)
