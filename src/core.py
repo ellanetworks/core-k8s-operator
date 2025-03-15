@@ -13,7 +13,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 STATUS_ENDPOINT = "/api/v1/status"
-OPERATOR_ENDPOINT = "/api/v1/operator/id"
+OPERATOR_ENDPOINT = "/api/v1/operator"
 ROUTES_ENDPOINT = "/api/v1/routes"
 USERS_ENDPOINT = "/api/v1/users"
 
@@ -175,27 +175,45 @@ class EllaCore:
         self._make_request("POST", ROUTES_ENDPOINT, data=route_config)
         logger.info(f"Created route {destination}.")
 
-    def get_operator(self) -> Operator:
+    def get_operator(self) -> Operator | None:
         """Get the operator information."""
         response = self._make_request("GET", OPERATOR_ENDPOINT)
         if response is None:
             raise ValueError("Operator not found.")
         result = response.get("result", None)
         if result is None:
-            raise ValueError("Operator not found.")
+            raise ValueError("Result not found in operator")
+        operator_id = result.get("id", None)
+        if operator_id is None:
+            raise ValueError("Operator ID not found.")
+        operator_slice = result.get("slice", None)
+        if operator_slice is None:
+            raise ValueError("Operator Slice not found.")
+        operator_tracking = result.get("tracking", None)
+        if operator_tracking is None:
+            raise ValueError("Operator Tracking not found.")
+        operator_home_network = result.get("homeNetwork", None)
+        if operator_home_network is None:
+            raise ValueError("Operator Home Network not found.")
+        mcc = operator_id.get("mcc", "")
+        mnc = operator_id.get("mnc", "")
+        sst = operator_slice.get("sst", 0)
+        sd = operator_slice.get("sd", 0)
+        supported_tacs = operator_tracking.get("supportedTacs", [])
+        public_key = operator_home_network.get("publicKey", "")
         return Operator(
             id=OperatorID(
-                mcc=result["id"]["mcc"],
-                mnc=result["id"]["mnc"],
+                mcc=mcc,
+                mnc=mnc,
             ),
             slice=OperatorSlice(
-                sst=result["slice"]["sst"],
-                sd=result["slice"]["sd"],
+                sst=sst,
+                sd=sd,
             ),
             tracking=OperatorTracking(
-                supported_tacs=result["tracking"]["supportedTACs"],
+                supported_tacs=supported_tacs,
             ),
             home_network=OperatorHomeNetwork(
-                public_key=result["homeNetwork"]["publicKey"],
+                public_key=public_key,
             ),
         )

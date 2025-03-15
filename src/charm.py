@@ -335,6 +335,9 @@ class EllaK8SCharm(CharmBase):
             return
         self._ella_core.set_token(token)
         operator = self._ella_core.get_operator()
+        if not operator or not operator.tracking or not operator.slice:
+            logger.warning("Operator information not found.")
+            return
         for relation in self.model.relations.get(FIVEG_CORE_GNB_RELATION_NAME, []):
             if not relation.app:
                 logger.warning(
