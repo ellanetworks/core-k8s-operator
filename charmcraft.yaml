@@ -12,6 +12,7 @@ description: |
     Use Ella Core where you need 5G connectivity: in a factory, a warehouse, a farm, a stadium, a ship, a military base, or a remote location.
 
 links:
+  documentation: https://discourse.charmhub.io/t/ella-core-k8s/17090
   source:
     - https://github.com/ellanetworks/core-k8s-operator
   issues:
@@ -20,6 +21,10 @@ links:
 base: ubuntu@24.04
 platforms:
   amd64:
+
+assumes:
+  - k8s-api
+  - juju >= 3.6
 
 parts:
   charm:
