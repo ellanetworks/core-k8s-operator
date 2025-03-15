@@ -283,6 +283,7 @@ dependencies = [
     { name = "ops" },
     { name = "pydantic" },
     { name = "pytest-interface-tester" },
+    { name = "requests" },
     { name = "rpds-py" },
 ]
 
@@ -310,6 +311,7 @@ requires-dist = [
     { name = "ops" },
     { name = "pydantic" },
     { name = "pytest-interface-tester" },
+    { name = "requests" },
     { name = "rpds-py", specifier = "==0.23.1" },
 ]
 

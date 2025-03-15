@@ -48,6 +48,12 @@ Unit              Workload  Agent  Address     Ports  Message
 ella-core-k8s/0*  active    idle   10.1.0.117 
 ```
 
+Fetch the username and password to access the Ella Core UI
+
+```bash
+juju show-secret ELLA_CORE_LOGIN --reveal
+```
+
 Deploy the gNodeB simulator and a router, and integrate the gNodeB simulator with Ella Core:
 
 ```bash

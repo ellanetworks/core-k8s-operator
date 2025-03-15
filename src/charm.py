@@ -80,7 +80,7 @@ CA_SUBJECT = "core-ca"
 CA_CERTIFICATE_JUJU_SECRET_LABEL = "self-signed-ca-certificate"
 N2_RELATION_NAME = "fiveg-n2"
 FIVEG_CORE_GNB_RELATION_NAME = "fiveg_core_gnb"
-ELLA_CORE_LOGIN_SECRET_LABEL = "CORE_LOGIN"
+ELLA_CORE_LOGIN_SECRET_LABEL = "ELLA_CORE_LOGIN"
 CA_CERTIFICATE_CHARM_PATH = "/var/lib/juju/storage/config/0/ca.pem"
 CHARM_USER_EMAIL = "charm@ellanetworks.com"
 

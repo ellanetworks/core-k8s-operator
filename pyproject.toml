@@ -10,6 +10,7 @@ dependencies = [
     "ops",
     "pydantic",
     "rpds-py==0.23.1",
+    "requests",
     "pytest-interface-tester",
 ]
 
