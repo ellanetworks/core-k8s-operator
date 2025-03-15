@@ -247,6 +247,7 @@ class EllaK8SCharm(CharmBase):
         self.unit.set_ports(API_PORT)
         self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
         self.framework.observe(self.on.fiveg_n2_relation_joined, self._configure)
+        self.framework.observe(self.on.fiveg_core_gnb_relation_joined, self._configure)
         self.framework.observe(self.on.update_status, self._configure)
         self.framework.observe(self.on["core"].pebble_ready, self._configure)
         self.framework.observe(self.on.config_changed, self._configure)
@@ -386,18 +387,29 @@ class EllaK8SCharm(CharmBase):
             logger.info("Core login secret not found.")
             return None
 
+    def _get_n2_amf_hostname(self) -> str:
+        _, amf_service_hostname = self.amf_service.get_info()
+        if amf_service_hostname:
+            return amf_service_hostname
+        return self._amf_hostname()
+
+    def _get_n2_amf_ip(self) -> Optional[str]:
+        amf_service_ip, _ = self.amf_service.get_info()
+        return amf_service_ip
+
     def _set_n2_information(self) -> None:
         """Set N2 information for the N2 relation."""
         if not self._relation_created(N2_RELATION_NAME):
             return
         if not self._service_is_running():
             return
-        amf_service_ip, amf_service_hostname = self.amf_service.get_info()
-        if not amf_service_ip or not amf_service_hostname:
+        n2_amf_ip = self._get_n2_amf_ip()
+        n2_amf_hostname = self._get_n2_amf_hostname()
+        if not n2_amf_ip or not n2_amf_hostname:
             return
         self.n2_provider.set_n2_information(
-            amf_ip_address=amf_service_ip,
-            amf_hostname=amf_service_hostname,
+            amf_ip_address=n2_amf_ip,
+            amf_hostname=n2_amf_hostname,
             amf_port=N2_PORT,
         )
 
@@ -694,6 +706,14 @@ class EllaK8SCharm(CharmBase):
         if not binding or not binding.network.ingress_address:
             return None
         return str(binding.network.ingress_address)
+
+    def _amf_hostname(self) -> str:
+        """Build and returns the AMF hostname in the cluster.
+
+        Returns:
+            str: The AMF hostname.
+        """
+        return f"{self.model.app.name}-external.{self.model.name}.svc.cluster.local"
 
 
 def _generate_password() -> str:

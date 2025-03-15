@@ -137,9 +137,14 @@ class EllaCore:
             response = self._make_request("GET", STATUS_ENDPOINT)
             if not response:
                 return None
-            return StatusResponse(
-                initialized=response.get("initialized", False), version=response.get("version", "")
-            )
+            result = response.get("result")
+            if not result:
+                logger.error("Failed to login to Ella Core.")
+                return None
+            logger.info("TO DELETE: Response from Ella Core: %s", response)
+            initialized = result.get("initialized", False)
+            version = result.get("version", "")
+            return StatusResponse(initialized=initialized, version=version)
         except requests.exceptions.HTTPError:
             logger.warning("Failed to get status from Ella Core.")
             return None

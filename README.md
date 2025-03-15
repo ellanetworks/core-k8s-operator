@@ -6,6 +6,8 @@ The Ella Core operator for Kubernetes is a Juju charm allowing lifecycle operati
 
 ## Getting Started
 
+### 1. Install the infrastructure
+
 Install Canonical K8s and Multus
 
 ```bash
@@ -28,6 +30,8 @@ Create a Juju model
 juju add-model dev
 ```
 
+### 2. Install Ella Core
+
 Deploy Ella Core
 
 ```bash
@@ -37,22 +41,30 @@ juju deploy ella-core-k8s ella-core --channel=edge --trust
 Wait for the application to be running. You can check the status with `juju status`.
 
 ```bash
-guillaume@courge:~/code/core-k8s-operator$ juju status
+guillaume@courge:~$ juju status
 Model  Controller     Cloud/Region   Version  SLA          Timestamp
-dev1   k8s-localhost  k8s-localhost  3.6.4    unsupported  11:13:32-04:00
+dev    k8s-localhost  k8s-localhost  3.6.4    unsupported  12:26:49-04:00
 
-App            Version  Status  Scale  Charm          Channel  Rev  Address         Exposed  Message
-ella-core-k8s           active      1  ella-core-k8s             0  10.152.183.149  no       
+App        Version  Status  Scale  Charm          Channel  Rev  Address         Exposed  Message
+ella-core           active      1  ella-core-k8s             0  10.152.183.161  no       
 
-Unit              Workload  Agent  Address     Ports  Message
-ella-core-k8s/0*  active    idle   10.1.0.117 
+Unit          Workload  Agent  Address    Ports  Message
+ella-core/0*  active    idle   10.1.0.87  
 ```
+
+Note the IP address of the Ella Core application.
 
 Fetch the username and password to access the Ella Core UI
 
 ```bash
 juju show-secret ELLA_CORE_LOGIN --reveal
 ```
+
+Open a browser and navigate to the Ella Core UI at `https://<IP_ADDRESS>:5002`. Use the username and password to log in.
+
+![alt text](image.png)
+
+### 3. Integrate Ella Core with a 5G Radio simulator
 
 Deploy the gNodeB simulator and a router, and integrate the gNodeB simulator with Ella Core:
 
