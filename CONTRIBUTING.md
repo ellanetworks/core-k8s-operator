@@ -1,8 +1,12 @@
 # Contributing
 
+Ella Core is an open-source project and we welcome contributions from the community. This document provides guidelines for contributing to the project. Contributions to Ella Core can be made in the form of code, documentation, bug reports, feature requests, and feedback. We will judge contributions based on their quality, relevance, and alignment with the project's tenets.
+
+## Getting Started
+
 To make contributions to this charm, you'll need a working Juju development setup.
 
-## Prerequisites
+### Prerequisites
 
 Install Charmcraft and LXD:
 ```shell
@@ -41,10 +45,11 @@ uv sync
 source .venv/bin/activate
 ```
 
-## Testing
+## How-Tos
 
-This project uses `tox` for managing test environments. It can be installed
-with:
+### Test
+
+This project uses `tox` for managing test environments. It can be installed with:
 
 ```shell
 uv tool install tox --with tox-uv
@@ -64,9 +69,10 @@ tox -e integration -- --charm_path=PATH_TO_BUILD_CHARM  # integration tests
 Integration tests require the charm to be built with `charmcraft pack` first.
 ```
 
-## Build
+### Build
 
 Go to the charm directory and run:
+
 ```bash
 charmcraft pack
 ```
