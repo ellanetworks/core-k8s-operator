@@ -243,6 +243,18 @@ wheels = [
 ]
 
 [[package]]
+name = "click"
+version = "8.1.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b9/2e/0090cbf739cee7d23781ad4b89a9894a41538e4fcf4c31dcdd705b78eb8b/click-8.1.8.tar.gz", hash = "sha256:ed53c9d8990d83c2a27deae68e4ee337473f6330c040a31d4225c9574d16096a", size = 226593 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/d4/7ebdbd03970677812aac39c869717059dbb71a4cfc033ca6e5221787892c/click-8.1.8-py3-none-any.whl", hash = "sha256:63c132bbbed01578a06712a2d1f497bb62d9c1c0d329b7903a866228027263b2", size = 98188 },
+]
+
+[[package]]
 name = "codespell"
 version = "2.4.1"
 source = { registry = "https://pypi.org/simple" }
@@ -270,6 +282,8 @@ dependencies = [
     { name = "jinja2" },
     { name = "ops" },
     { name = "pydantic" },
+    { name = "pytest-interface-tester" },
+    { name = "requests" },
     { name = "rpds-py" },
 ]
 
@@ -296,6 +310,8 @@ requires-dist = [
     { name = "jinja2" },
     { name = "ops" },
     { name = "pydantic" },
+    { name = "pytest-interface-tester" },
+    { name = "requests" },
     { name = "rpds-py", specifier = "==0.23.1" },
 ]
 
@@ -1177,6 +1193,21 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-interface-tester"
+version = "3.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ops-scenario" },
+    { name = "pydantic" },
+    { name = "pytest" },
+    { name = "typer" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7f/e1/9ef461c4c0845b253b3bfb45ad36e3d9ad851e5baf9c2ac259310887676e/pytest_interface_tester-3.3.1.tar.gz", hash = "sha256:0bf4ca6404420fb23035e4dc46f16e8e619d279abd210d7c9ced2b40e89be14f", size = 27655 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/49/2d/846a7cd30d6802ab4f230443c967d48aa33b8a251e1d1815dd6ac8587183/pytest_interface_tester-3.3.1-py3-none-any.whl", hash = "sha256:385a8f9d111787d7ab80b90988d3411de31c12640701e3fa41b01a17b192477f", size = 21766 },
+]
+
+[[package]]
 name = "pytest-operator"
 version = "0.41.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1504,6 +1535,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/eb/79/72064e6a701c2183016abbbfedaba506d81e30e232a68c9f0d6f6fcd1574/traitlets-5.14.3.tar.gz", hash = "sha256:9ed0579d3502c94b4b3732ac120375cda96f923114522847de4b3bb98b96b6b7", size = 161621 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/00/c0/8f5d070730d7836adc9c9b6408dec68c6ced86b304a9b26a14df072a6e8c/traitlets-5.14.3-py3-none-any.whl", hash = "sha256:b74e89e397b1ed28cc831db7aea759ba6640cb3de13090ca145426688ff1ac4f", size = 85359 },
+]
+
+[[package]]
+name = "typer"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e1/45/bcbc581f87c8d8f2a56b513eb994d07ea4546322818d95dc6a3caf2c928b/typer-0.7.0.tar.gz", hash = "sha256:ff797846578a9f2a201b53442aedeb543319466870fbe1c701eab66dd7681165", size = 251871 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0d/44/56c3f48d2bb83d76f5c970aef8e2c3ebd6a832f09e3621c5395371fe6999/typer-0.7.0-py3-none-any.whl", hash = "sha256:b5e704f4e48ec263de1c0b3a2387cd405a13767d2f907f44c1a08cbad96f606d", size = 38377 },
 ]
 
 [[package]]

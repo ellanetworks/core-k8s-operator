@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 
 import tempfile
+from unittest.mock import Mock, patch
 
 from ops import testing
 from ops.pebble import Layer
@@ -25,7 +26,16 @@ class TestCharmConfigure(EllaUnitTestFixtures):
             state_in = testing.State(
                 containers=[container], leader=True, relations=[peer_relation]
             )
-            self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
+            with patch(
+                "charm.EllaCore",
+                return_value=Mock(
+                    **{  # type: ignore
+                        "is_api_available.return_value": False,
+                        "is_initialized.return_value": False,
+                    },
+                ),
+            ):
+                self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
             with open("tests/unit/expected_config.yaml", "r") as f:
                 assert local_file.read().decode() == f.read()
@@ -45,8 +55,16 @@ class TestCharmConfigure(EllaUnitTestFixtures):
             state_in = testing.State(
                 containers=[container], leader=True, relations=[peer_relation]
             )
-
-            state_out = self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
+            with patch(
+                "charm.EllaCore",
+                return_value=Mock(
+                    **{  # type: ignore
+                        "is_api_available.return_value": False,
+                        "is_initialized.return_value": False,
+                    },
+                ),
+            ):
+                state_out = self.ctx.run(self.ctx.on.pebble_ready(container), state_in)
 
             container = state_out.get_container("core")
             assert container.layers["core"] == Layer(
