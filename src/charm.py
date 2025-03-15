@@ -288,9 +288,11 @@ class EllaK8SCharm(CharmBase):
 
         It is used to:
         - Configure Kubernetes resources
+        - Configure self signed certificates
         - Configure the config file
         - Configure the Pebble layer
-        - Configure netorking
+        - Configure the charm authorization
+        - Configure the N2 information
         """
         try:  # workaround for https://github.com/canonical/operator/issues/736
             self._charm_config: CharmConfig = CharmConfig.from_charm(charm=self)
@@ -312,6 +314,7 @@ class EllaK8SCharm(CharmBase):
         self._configure_self_signed_certificates()
         changed = self._configure_config_file()
         self._configure_pebble(restart=changed)
+        self._create_admin_account_if_does_not_exist()
         self._sync_network_config()
 
     def _on_remove(self, _: EventBase):
