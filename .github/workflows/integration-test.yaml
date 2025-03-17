@@ -31,11 +31,12 @@ jobs:
       #   id: charm-path
       #   run: echo "charm_path=$(find built/ -name '*.charm' -type f -print)" >> $GITHUB_OUTPUT
       
-      - name: Install Canonical K8s and Juju using concierge
+      - name: Install Canonical K8s
         run: |
           sudo rm -rf /run/containerd
-          sudo snap install --classic concierge
-          sudo concierge prepare -p k8s
+          sudo snap install k8s --channel=1.32-classic/stable --classic
+          k8s bootstrap
+          k8s status --wait-ready
 
       - name: Install Multus CNI
         run: |
