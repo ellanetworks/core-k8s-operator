@@ -31,11 +31,11 @@ jobs:
     uses: ./.github/workflows/build.yaml
     secrets: inherit
 
-  # integration-test:
-  #   needs: 
-  #     - build
-  #   uses: ./.github/workflows/integration-test.yaml
-  #   secrets: inherit
+  integration-test:
+    # needs: 
+    #   - build
+    uses: ./.github/workflows/integration-test.yaml
+    secrets: inherit
 
   publish-charm:
     needs:
