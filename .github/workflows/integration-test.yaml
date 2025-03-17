@@ -31,22 +31,16 @@ jobs:
       #   id: charm-path
       #   run: echo "charm_path=$(find built/ -name '*.charm' -type f -print)" >> $GITHUB_OUTPUT
       
-      - name: Install Canonical K8s and Multus
+      - name: Install Canonical K8s and Juju using concierge
         run: |
+          sudo rm -rf /run/containerd
           sudo snap install --classic concierge
           sudo concierge prepare -p k8s
 
-      # - name: Install Juju and bootstrap controller
-      #   run: |
-      #     sudo snap install juju --channel 3/stable
-      #     juju add-k8s k8s-localhost
-      #     juju bootstrap k8s-localhost
-      
-      - name: Check k8s status
-        if: failure()
+      - name: Install Multus CNI
         run: |
-          sudo k8s inspect
-
+          sudo k8s kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
+      
       # - name: Run integration tests
       #   run: |
       #     tox -e integration -- --charm_path="${{ steps.charm-path.outputs.charm_path }}"
