@@ -28,37 +28,21 @@ jobs:
       #   id: charm-path
       #   run: echo "charm_path=$(find built/ -name '*.charm' -type f -print)" >> $GITHUB_OUTPUT
       
-      - name: Install Canonical K8s and Multus
+      - name: Install Canonical K8s
         run: |
           sudo rm -rf /run/containerd
-          sudo snap install k8s --classic --channel=1.32-classic/stable
-          sleep 5
-          sudo k8s bootstrap --timeout=5m
-          sleep 5
+          sudo snap install k8s --channel=1.32-classic/stable --classic
+          sudo k8s bootstrap --file=k8s_bootstrap.yaml --timeout=5m
+          sudo k8s status --wait-ready
+
+      - name: Install Multus CNI
+        run: |
           sudo k8s kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
       
-      - name: Install Juju and bootstrap controller
-        run: |
-          sudo snap install juju --channel 3/stable
-          juju add-k8s k8s-localhost
-          juju bootstrap k8s-localhost
-      
-      - name: Check k8s status
-        if: failure()
-        run: |
-          sudo k8s status
-
       # - name: Run integration tests
       #   run: |
       #     tox -e integration -- --charm_path="${{ steps.charm-path.outputs.charm_path }}"
 
-      - name: Archive charmcraft logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: charmcraft-logs
-          path: /home/runner/.local/state/charmcraft/log/*.log
-  
       - name: Archive juju crashdump
         if: failure()
         uses: actions/upload-artifact@v4
