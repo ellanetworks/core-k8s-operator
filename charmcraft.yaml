@@ -29,20 +29,11 @@ assumes:
 parts:
   charm:
     source: .
-    charm-requirements:
-      - requirements.txt
-    plugin: charm
-    build-packages:
-      - libffi-dev
-      - libssl-dev
-      - pkg-config
+    plugin: go
     build-snaps:
-      - astral-uv
-      - rustup
-    override-build: |
-      rustup default stable
-      uv export --frozen --no-dev -o requirements.txt
-      craftctl default
+      - go
+    organize:
+      bin/notary-k8s: dispatch
 
 containers:
   core:

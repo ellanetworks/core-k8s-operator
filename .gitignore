@@ -1,19 +1,10 @@
 *.idea
 .vscode/
 .coverage
-.tox/
 venv/
 build/
 .charm_tracing_buffer.raw
 build/
-src/sdcore_ausf_k8s_operator.egg-info/
-
-# Python
-**/venv/**
-*.pyc
-.python-version
-.mypy_cache/
-__pycache__/
 
 # Charmcraft
 *.charm
