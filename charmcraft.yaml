@@ -33,7 +33,7 @@ parts:
     build-snaps:
       - go
     organize:
-      bin/notary-k8s: dispatch
+      bin/core-k8s: dispatch
 
 containers:
   core:

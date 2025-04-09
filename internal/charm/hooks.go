@@ -11,18 +11,33 @@ import (
 )
 
 const (
-	KeyPath    = "/etc/core/config/key.pem"
-	CertPath   = "/etc/core/config/cert.pem"
 	DBPath     = "/var/lib/core/database/core.db"
 	ConfigPath = "/etc/core/config/core.yaml"
 	Port       = 2111
 )
 
+type SystemLoggingConfig struct {
+	Level  string `yaml:"level"`
+	Output string `yaml:"output"`
+}
+
+type AuditLoggingConfig struct {
+	Output string `yaml:"output"`
+	Path   string `yaml:"path"`
+}
+
+type LoggingConfig struct {
+	System SystemLoggingConfig `yaml:"system"`
+	Audit  AuditLoggingConfig  `yaml:"audit"`
+}
+
+type DBConfig struct {
+	Path string `yaml:"path"`
+}
+
 type CoreConfig struct {
-	KeyPath  string `yaml:"key_path"`
-	CertPath string `yaml:"cert_path"`
-	DBPath   string `yaml:"db_path"`
-	Port     int    `yaml:"port"`
+	Logging LoggingConfig `yaml:"logging"`
+	DB      DBConfig      `yaml:"db"`
 }
 
 func pushConfigFile(containerName string, path string) error {
@@ -39,10 +54,18 @@ func pushConfigFile(containerName string, path string) error {
 	}
 
 	coreConfig := CoreConfig{
-		KeyPath:  KeyPath,
-		CertPath: CertPath,
-		DBPath:   DBPath,
-		Port:     2111,
+		Logging: LoggingConfig{
+			System: SystemLoggingConfig{
+				Level:  "info",
+				Output: "stdout",
+			},
+			Audit: AuditLoggingConfig{
+				Output: "stdout",
+			},
+		},
+		DB: DBConfig{
+			Path: DBPath,
+		},
 	}
 
 	d, err := yaml.Marshal(coreConfig)
