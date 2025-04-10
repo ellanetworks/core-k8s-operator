@@ -13,8 +13,12 @@ const (
 	ConfigPath                        = "/etc/core/core.yaml"
 	N2Port                            = 38412
 	APIPort                           = 2111
+	N2InterfaceBridgeName             = "n2-br"
+	N2NetworkAttachmentDefinitionName = "core-n2"
 	N3InterfaceBridgeName             = "n3-br"
 	N3NetworkAttachmentDefinitionName = "core-n3"
+	N6InterfaceBridgeName             = "n6-br"
+	N6NetworkAttachmentDefinitionName = "core-n6"
 )
 
 func setPorts(hookContext *goops.HookContext) error {
@@ -30,6 +34,112 @@ func setPorts(hookContext *goops.HookContext) error {
 	err := hookContext.Commands.SetPorts(setPortOpts)
 	if err != nil {
 		return fmt.Errorf("could not set ports: %w", err)
+	}
+
+	return nil
+}
+
+func createAdditionalInterfaces(hookContext *goops.HookContext, k8s *K8s) error {
+	configGetOpts := &commands.ConfigGetOptions{
+		Key: "n2-ip",
+	}
+
+	n2IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
+	if err != nil {
+		return fmt.Errorf("could not get n2-ip config: %w", err)
+	}
+
+	createN2NADOpts := &CreateNADOptions{
+		Name: N2NetworkAttachmentDefinitionName,
+		NAD: &NetworkAttachmentDefinition{
+			CNIVersion: "0.3.1",
+			IPAM: IPAM{
+				Type: "static",
+				Addresses: []Address{
+					{
+						n2IPAddress,
+					},
+				},
+			},
+			Capabilities: Capabilities{
+				Mac: true,
+			},
+			Type:   "bridge",
+			Bridge: N2InterfaceBridgeName,
+		},
+	}
+
+	err = k8s.createNad(createN2NADOpts)
+	if err != nil {
+		return fmt.Errorf("could not create n2 nad: %w", err)
+	}
+
+	configGetOpts = &commands.ConfigGetOptions{
+		Key: "n3-ip",
+	}
+
+	n3IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
+	if err != nil {
+		return fmt.Errorf("could not get n3-ip config: %w", err)
+	}
+
+	createN3NADOpts := &CreateNADOptions{
+		Name: N3NetworkAttachmentDefinitionName,
+		NAD: &NetworkAttachmentDefinition{
+			CNIVersion: "0.3.1",
+			IPAM: IPAM{
+				Type: "static",
+				Addresses: []Address{
+					{
+						n3IPAddress,
+					},
+				},
+			},
+			Capabilities: Capabilities{
+				Mac: true,
+			},
+			Type:   "bridge",
+			Bridge: N3InterfaceBridgeName,
+		},
+	}
+
+	err = k8s.createNad(createN3NADOpts)
+	if err != nil {
+		return fmt.Errorf("could not create n3 nad: %w", err)
+	}
+
+	configGetOpts = &commands.ConfigGetOptions{
+		Key: "n6-ip",
+	}
+
+	n6IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
+	if err != nil {
+		return fmt.Errorf("could not get n3-ip config: %w", err)
+	}
+
+	createN6NADOpts := &CreateNADOptions{
+		Name: N6NetworkAttachmentDefinitionName,
+		NAD: &NetworkAttachmentDefinition{
+			CNIVersion: "0.3.1",
+			IPAM: IPAM{
+				Type: "static",
+				Addresses: []Address{
+					{
+						n6IPAddress,
+					},
+				},
+			},
+			Capabilities: Capabilities{
+				Mac: true,
+			},
+			Type:   "bridge",
+			Bridge: N6InterfaceBridgeName,
+		},
+	}
+
+	err = k8s.createNad(createN6NADOpts)
+	if err != nil {
+		return fmt.Errorf("could not create n6 nad: %w", err)
 	}
 
 	return nil
@@ -63,43 +173,13 @@ func HandleDefaultHook(hookContext *goops.HookContext) {
 		return
 	}
 
-	configGetOpts := &commands.ConfigGetOptions{
-		Key: "n3-ip",
-	}
-
-	n3IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
+	err = createAdditionalInterfaces(hookContext, k8s)
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not get n3-ip config:", err.Error())
+		hookContext.Commands.JujuLog(commands.Error, "Could not create additional interfaces:", err.Error())
 		return
 	}
 
-	createNADOpts := &CreateNADOptions{
-		Name: N3NetworkAttachmentDefinitionName,
-		NAD: &NetworkAttachmentDefinition{
-			CNIVersion: "0.3.1",
-			IPAM: IPAM{
-				Type: "static",
-				Addresses: []Address{
-					{
-						n3IPAddress,
-					},
-				},
-			},
-			Capabilities: Capabilities{
-				Mac: true,
-			},
-			Type:   "bridge",
-			Bridge: N3InterfaceBridgeName,
-		},
-	}
-
-	err = k8s.createNad(createNADOpts)
-	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not create random NAD:", err.Error())
-		return
-	}
-
-	hookContext.Commands.JujuLog(commands.Info, "Random NAD created")
+	hookContext.Commands.JujuLog(commands.Info, "Additional interfaces created")
 
 	pebble, err := client.New(&client.Config{Socket: socketPath})
 	if err != nil {

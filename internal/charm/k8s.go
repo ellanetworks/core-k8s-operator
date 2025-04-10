@@ -63,28 +63,24 @@ func NewK8s(namespace string) (*K8s, error) {
 // createNad creates the NetworkAttachmentDefinition in the specified namespace.
 // If the NAD already exists, it does not attempt to create it again.
 func (k *K8s) createNad(opts *CreateNADOptions) error {
-	// Check if the NAD already exists.
 	_, err := k.Client.
 		K8sCniCncfIoV1().
 		NetworkAttachmentDefinitions(k.Namespace).
 		Get(context.TODO(), opts.Name, metav1.GetOptions{})
 	if err == nil {
-		// The NAD exists already.
 		fmt.Printf("NetworkAttachmentDefinition %q already exists in namespace %q.\n", opts.Name, k.Namespace)
 		return nil
 	}
-	// If the error is not a NotFound error, return the error.
+
 	if !apierrors.IsNotFound(err) {
 		return fmt.Errorf("error checking for existing NetworkAttachmentDefinition: %w", err)
 	}
 
-	// Marshal the NAD configuration.
 	nadConfig, err := json.Marshal(opts.NAD)
 	if err != nil {
 		return fmt.Errorf("error marshalling NetworkAttachmentDefinition: %w", err)
 	}
 
-	// Define the new NAD object.
 	newNad := &netattachv1.NetworkAttachmentDefinition{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      opts.Name,
@@ -95,7 +91,6 @@ func (k *K8s) createNad(opts *CreateNADOptions) error {
 		},
 	}
 
-	// Create the NAD using the clientset.
 	_, err = k.Client.
 		K8sCniCncfIoV1().
 		NetworkAttachmentDefinitions(k.Namespace).
@@ -104,6 +99,5 @@ func (k *K8s) createNad(opts *CreateNADOptions) error {
 		return fmt.Errorf("error creating NetworkAttachmentDefinition: %w", err)
 	}
 
-	fmt.Printf("Successfully created NetworkAttachmentDefinition %q in namespace %q.\n", opts.Name, k.Namespace)
 	return nil
 }
