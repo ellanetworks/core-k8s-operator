@@ -9,10 +9,12 @@ import (
 )
 
 const (
-	DBPath     = "/var/lib/core/core.db"
-	ConfigPath = "/etc/core/core.yaml"
-	N2Port     = 38412
-	APIPort    = 2111
+	DBPath                            = "/var/lib/core/core.db"
+	ConfigPath                        = "/etc/core/core.yaml"
+	N2Port                            = 38412
+	APIPort                           = 2111
+	N3InterfaceBridgeName             = "n3-br"
+	N3NetworkAttachmentDefinitionName = "core-n3"
 )
 
 func setPorts(hookContext *goops.HookContext) error {
@@ -52,6 +54,52 @@ func HandleDefaultHook(hookContext *goops.HookContext) {
 	}
 
 	hookContext.Commands.JujuLog(commands.Info, "Ports set")
+
+	modelName := hookContext.Environment.JujuModelName()
+
+	k8s, err := NewK8s(modelName)
+	if err != nil {
+		hookContext.Commands.JujuLog(commands.Error, "Could not create k8s client:", err.Error())
+		return
+	}
+
+	configGetOpts := &commands.ConfigGetOptions{
+		Key: "n3-ip",
+	}
+
+	n3IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
+	if err != nil {
+		hookContext.Commands.JujuLog(commands.Error, "Could not get n3-ip config:", err.Error())
+		return
+	}
+
+	createNADOpts := &CreateNADOptions{
+		Name: N3NetworkAttachmentDefinitionName,
+		NAD: &NetworkAttachmentDefinition{
+			CNIVersion: "0.3.1",
+			IPAM: IPAM{
+				Type: "static",
+				Addresses: []Address{
+					{
+						n3IPAddress,
+					},
+				},
+			},
+			Capabilities: Capabilities{
+				Mac: true,
+			},
+			Type:   "bridge",
+			Bridge: N3InterfaceBridgeName,
+		},
+	}
+
+	err = k8s.createNad(createNADOpts)
+	if err != nil {
+		hookContext.Commands.JujuLog(commands.Error, "Could not create random NAD:", err.Error())
+		return
+	}
+
+	hookContext.Commands.JujuLog(commands.Info, "Random NAD created")
 
 	pebble, err := client.New(&client.Config{Socket: socketPath})
 	if err != nil {
