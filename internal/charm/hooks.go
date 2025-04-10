@@ -2,6 +2,7 @@ package charm
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/canonical/pebble/client"
 	"github.com/gruyaume/goops"
@@ -9,16 +10,20 @@ import (
 )
 
 const (
+	ContainerName                     = "core"
 	DBPath                            = "/var/lib/core/core.db"
 	ConfigPath                        = "/etc/core/core.yaml"
 	N2Port                            = 38412
 	APIPort                           = 2111
 	N2InterfaceBridgeName             = "n2-br"
 	N2NetworkAttachmentDefinitionName = "core-n2"
+	N2InterfaceName                   = "n2"
 	N3InterfaceBridgeName             = "n3-br"
 	N3NetworkAttachmentDefinitionName = "core-n3"
+	N3InterfaceName                   = "n3"
 	N6InterfaceBridgeName             = "n6-br"
 	N6NetworkAttachmentDefinitionName = "core-n6"
+	N6InterfaceName                   = "n6"
 )
 
 func setPorts(hookContext *goops.HookContext) error {
@@ -37,6 +42,22 @@ func setPorts(hookContext *goops.HookContext) error {
 	}
 
 	return nil
+}
+
+func getAppName(hookContext *goops.HookContext) string {
+	unitName := hookContext.Environment.JujuUnitName()
+	parts := strings.Split(unitName, "/")
+	appName := parts[0]
+
+	return appName
+}
+
+func getPodName(hookContext *goops.HookContext) string {
+	unitName := hookContext.Environment.JujuUnitName()
+	parts := strings.Split(unitName, "/")
+	podName := strings.Join(parts, "-")
+
+	return podName
 }
 
 func createAdditionalInterfaces(hookContext *goops.HookContext, k8s *K8s) error {
@@ -140,6 +161,32 @@ func createAdditionalInterfaces(hookContext *goops.HookContext, k8s *K8s) error 
 	err = k8s.createNad(createN6NADOpts)
 	if err != nil {
 		return fmt.Errorf("could not create n6 nad: %w", err)
+	}
+
+	patchStatefulSetOpts := &PatchStatefulSetOptions{
+		Name:          getAppName(hookContext),
+		ContainerName: ContainerName,
+		PodName:       getPodName(hookContext),
+		CapNetAdmin:   true,
+		NetworkAnnotations: []*NetworkAnnotation{
+			{
+				Name:      N2NetworkAttachmentDefinitionName,
+				Interface: N2InterfaceName,
+			},
+			{
+				Name:      N3NetworkAttachmentDefinitionName,
+				Interface: N3InterfaceName,
+			},
+			{
+				Name:      N6NetworkAttachmentDefinitionName,
+				Interface: N6InterfaceName,
+			},
+		},
+	}
+
+	err = k8s.patchStatefulSet(patchStatefulSetOpts)
+	if err != nil {
+		return fmt.Errorf("could not patch statefulset: %w", err)
 	}
 
 	return nil
