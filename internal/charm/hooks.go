@@ -2,96 +2,24 @@ package charm
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/canonical/pebble/client"
 	"github.com/gruyaume/goops"
 	"github.com/gruyaume/goops/commands"
-	"gopkg.in/yaml.v3"
 )
 
 const (
-	DBPath     = "/var/lib/core/database/core.db"
-	ConfigPath = "/etc/core/config/core.yaml"
-	Port       = 2111
+	DBPath     = "/var/lib/core/core.db"
+	ConfigPath = "/etc/core/core.yaml"
+	N2Port     = 38412
+	APIPort    = 2111
 )
-
-type SystemLoggingConfig struct {
-	Level  string `yaml:"level"`
-	Output string `yaml:"output"`
-}
-
-type AuditLoggingConfig struct {
-	Output string `yaml:"output"`
-	Path   string `yaml:"path"`
-}
-
-type LoggingConfig struct {
-	System SystemLoggingConfig `yaml:"system"`
-	Audit  AuditLoggingConfig  `yaml:"audit"`
-}
-
-type DBConfig struct {
-	Path string `yaml:"path"`
-}
-
-type CoreConfig struct {
-	Logging LoggingConfig `yaml:"logging"`
-	DB      DBConfig      `yaml:"db"`
-}
-
-func pushConfigFile(containerName string, path string) error {
-	socketPath := "/charm/containers/" + containerName + "/pebble.socket"
-
-	pebble, err := client.New(&client.Config{Socket: socketPath})
-	if err != nil {
-		return fmt.Errorf("could not create pebble client: %w", err)
-	}
-
-	_, err = pebble.SysInfo()
-	if err != nil {
-		return fmt.Errorf("could not connect to pebble: %w", err)
-	}
-
-	coreConfig := CoreConfig{
-		Logging: LoggingConfig{
-			System: SystemLoggingConfig{
-				Level:  "info",
-				Output: "stdout",
-			},
-			Audit: AuditLoggingConfig{
-				Output: "stdout",
-			},
-		},
-		DB: DBConfig{
-			Path: DBPath,
-		},
-	}
-
-	d, err := yaml.Marshal(coreConfig)
-	if err != nil {
-		return fmt.Errorf("could not marshal config to YAML: %w", err)
-	}
-
-	source := strings.NewReader(string(d))
-	pushOptions := &client.PushOptions{
-		Source: source,
-		Path:   path,
-	}
-
-	err = pebble.Push(pushOptions)
-	if err != nil {
-		return fmt.Errorf("could not push config file: %w", err)
-	}
-
-	return nil
-}
 
 func setPorts(hookContext *goops.HookContext) error {
 	setPortOpts := &commands.SetPortsOptions{
 		Ports: []*commands.Port{
 			{
-				Port:     Port,
+				Port:     APIPort,
 				Protocol: "tcp",
 			},
 		},
@@ -125,13 +53,41 @@ func HandleDefaultHook(hookContext *goops.HookContext) {
 
 	hookContext.Commands.JujuLog(commands.Info, "Ports set")
 
-	err = pushConfigFile("core", "/etc/core/config/core.yaml")
+	pebble, err := client.New(&client.Config{Socket: socketPath})
+	if err != nil {
+		hookContext.Commands.JujuLog(commands.Error, "Could not connect to pebble:", err.Error())
+		return
+	}
+
+	expectedConfig, err := getExpectedConfig()
+	if err != nil {
+		hookContext.Commands.JujuLog(commands.Error, "Could not get expected config:", err.Error())
+		return
+	}
+
+	err = pushConfigFile(pebble, expectedConfig, ConfigPath)
 	if err != nil {
 		hookContext.Commands.JujuLog(commands.Error, "Could not push config file:", err.Error())
 		return
 	}
 
 	hookContext.Commands.JujuLog(commands.Info, "Config file pushed")
+
+	err = addPebbleLayer(pebble)
+	if err != nil {
+		hookContext.Commands.JujuLog(commands.Error, "Could not add pebble layer:", err.Error())
+		return
+	}
+
+	hookContext.Commands.JujuLog(commands.Info, "Pebble layer added")
+
+	err = startPebbleService(pebble)
+	if err != nil {
+		hookContext.Commands.JujuLog(commands.Error, "Could not start pebble service:", err.Error())
+		return
+	}
+
+	hookContext.Commands.JujuLog(commands.Info, "Pebble service started")
 }
 
 func SetStatus(hookContext *goops.HookContext) {
