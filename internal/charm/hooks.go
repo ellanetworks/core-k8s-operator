@@ -168,6 +168,7 @@ func createAdditionalInterfaces(hookContext *goops.HookContext, k8s *K8s) error 
 		ContainerName: ContainerName,
 		PodName:       getPodName(hookContext),
 		CapNetAdmin:   true,
+		Privileged:    true,
 		NetworkAnnotations: []*NetworkAnnotation{
 			{
 				Name:      N2NetworkAttachmentDefinitionName,

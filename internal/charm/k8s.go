@@ -50,6 +50,7 @@ type PatchStatefulSetOptions struct {
 	ContainerName      string
 	PodName            string
 	CapNetAdmin        bool
+	Privileged         bool
 	NetworkAnnotations []*NetworkAnnotation
 }
 
@@ -159,6 +160,21 @@ func (k *K8s) patchStatefulSet(opts *PatchStatefulSetOptions) error {
 				"capabilities": map[string]interface{}{
 					"add": []string{"NET_ADMIN"},
 				},
+			},
+		}
+		// Add the container patch under spec.template.spec.
+		patchMap["spec"].(map[string]interface{})["template"].(map[string]interface{})["spec"] = map[string]interface{}{
+			"containers": []interface{}{containerPatch},
+		}
+	}
+
+	// If privileged is required, add a patch to update the container's securityContext.
+	if opts.Privileged {
+		// Build the container patch which targets the container with the given name.
+		containerPatch := map[string]interface{}{
+			"name": opts.ContainerName,
+			"securityContext": map[string]interface{}{
+				"privileged": true,
 			},
 		}
 		// Add the container patch under spec.template.spec.
