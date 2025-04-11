@@ -10,20 +10,11 @@ import (
 )
 
 const (
-	ContainerName                     = "core"
-	DBPath                            = "/var/lib/core/core.db"
-	ConfigPath                        = "/etc/core/core.yaml"
-	N2Port                            = 38412
-	APIPort                           = 2111
-	N2InterfaceBridgeName             = "n2-br"
-	N2NetworkAttachmentDefinitionName = "core-n2"
-	N2InterfaceName                   = "n2"
-	N3InterfaceBridgeName             = "n3-br"
-	N3NetworkAttachmentDefinitionName = "core-n3"
-	N3InterfaceName                   = "n3"
-	N6InterfaceBridgeName             = "n6-br"
-	N6NetworkAttachmentDefinitionName = "core-n6"
-	N6InterfaceName                   = "n6"
+	ContainerName = "core"
+	DBPath        = "/var/lib/core/core.db"
+	ConfigPath    = "/etc/core/core.yaml"
+	APIPort       = 2111
+	N2Port        = 38412
 )
 
 func setPorts(hookContext *goops.HookContext) error {
@@ -60,139 +51,6 @@ func getPodName(hookContext *goops.HookContext) string {
 	return podName
 }
 
-func createAdditionalInterfaces(hookContext *goops.HookContext, k8s *K8s) error {
-	configGetOpts := &commands.ConfigGetOptions{
-		Key: "n2-ip",
-	}
-
-	n2IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
-	if err != nil {
-		return fmt.Errorf("could not get n2-ip config: %w", err)
-	}
-
-	createN2NADOpts := &CreateNADOptions{
-		Name: N2NetworkAttachmentDefinitionName,
-		NAD: &NetworkAttachmentDefinition{
-			CNIVersion: "0.3.1",
-			IPAM: IPAM{
-				Type: "static",
-				Addresses: []Address{
-					{
-						n2IPAddress,
-					},
-				},
-			},
-			Capabilities: Capabilities{
-				Mac: true,
-			},
-			Type:   "bridge",
-			Bridge: N2InterfaceBridgeName,
-		},
-	}
-
-	err = k8s.createNad(createN2NADOpts)
-	if err != nil {
-		return fmt.Errorf("could not create n2 nad: %w", err)
-	}
-
-	configGetOpts = &commands.ConfigGetOptions{
-		Key: "n3-ip",
-	}
-
-	n3IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
-	if err != nil {
-		return fmt.Errorf("could not get n3-ip config: %w", err)
-	}
-
-	createN3NADOpts := &CreateNADOptions{
-		Name: N3NetworkAttachmentDefinitionName,
-		NAD: &NetworkAttachmentDefinition{
-			CNIVersion: "0.3.1",
-			IPAM: IPAM{
-				Type: "static",
-				Addresses: []Address{
-					{
-						n3IPAddress,
-					},
-				},
-			},
-			Capabilities: Capabilities{
-				Mac: true,
-			},
-			Type:   "bridge",
-			Bridge: N3InterfaceBridgeName,
-		},
-	}
-
-	err = k8s.createNad(createN3NADOpts)
-	if err != nil {
-		return fmt.Errorf("could not create n3 nad: %w", err)
-	}
-
-	configGetOpts = &commands.ConfigGetOptions{
-		Key: "n6-ip",
-	}
-
-	n6IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
-	if err != nil {
-		return fmt.Errorf("could not get n3-ip config: %w", err)
-	}
-
-	createN6NADOpts := &CreateNADOptions{
-		Name: N6NetworkAttachmentDefinitionName,
-		NAD: &NetworkAttachmentDefinition{
-			CNIVersion: "0.3.1",
-			IPAM: IPAM{
-				Type: "static",
-				Addresses: []Address{
-					{
-						n6IPAddress,
-					},
-				},
-			},
-			Capabilities: Capabilities{
-				Mac: true,
-			},
-			Type:   "bridge",
-			Bridge: N6InterfaceBridgeName,
-		},
-	}
-
-	err = k8s.createNad(createN6NADOpts)
-	if err != nil {
-		return fmt.Errorf("could not create n6 nad: %w", err)
-	}
-
-	patchStatefulSetOpts := &PatchStatefulSetOptions{
-		Name:          getAppName(hookContext),
-		ContainerName: ContainerName,
-		PodName:       getPodName(hookContext),
-		CapNetAdmin:   true,
-		Privileged:    true,
-		NetworkAnnotations: []*NetworkAnnotation{
-			{
-				Name:      N2NetworkAttachmentDefinitionName,
-				Interface: N2InterfaceName,
-			},
-			{
-				Name:      N3NetworkAttachmentDefinitionName,
-				Interface: N3InterfaceName,
-			},
-			{
-				Name:      N6NetworkAttachmentDefinitionName,
-				Interface: N6InterfaceName,
-			},
-		},
-	}
-
-	err = k8s.patchStatefulSet(patchStatefulSetOpts)
-	if err != nil {
-		return fmt.Errorf("could not patch statefulset: %w", err)
-	}
-
-	return nil
-}
-
 func HandleDefaultHook(hookContext *goops.HookContext) {
 	isLeader, err := hookContext.Commands.IsLeader()
 	if err != nil {
@@ -221,13 +79,54 @@ func HandleDefaultHook(hookContext *goops.HookContext) {
 		return
 	}
 
-	err = createAdditionalInterfaces(hookContext, k8s)
+	configGetOpts := &commands.ConfigGetOptions{
+		Key: "n2-ip",
+	}
+
+	n2IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not create additional interfaces:", err.Error())
+		hookContext.Commands.JujuLog(commands.Error, "Could not get n2-ip config:", err.Error())
 		return
 	}
 
-	hookContext.Commands.JujuLog(commands.Info, "Additional interfaces created")
+	configGetOpts = &commands.ConfigGetOptions{
+		Key: "n3-ip",
+	}
+
+	n3IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
+	if err != nil {
+		hookContext.Commands.JujuLog(commands.Error, "Could not get n3-ip config:", err.Error())
+		return
+	}
+
+	configGetOpts = &commands.ConfigGetOptions{
+		Key: "n6-ip",
+	}
+
+	n6IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
+	if err != nil {
+		hookContext.Commands.JujuLog(commands.Error, "Could not get n6-ip config:", err.Error())
+		return
+	}
+
+	appName := getAppName(hookContext)
+	patchK8sResourcesOpts := &PatchK8sResourcesOptions{
+		N2IPAddress:     n2IPAddress,
+		N3IPAddress:     n3IPAddress,
+		N6IPAddress:     n6IPAddress,
+		StatefulsetName: appName,
+		AppName:         appName,
+		PodName:         getPodName(hookContext),
+		N2ServiceName:   fmt.Sprintf("%s-external", appName),
+	}
+
+	err = k8s.patchK8sResources(patchK8sResourcesOpts)
+	if err != nil {
+		hookContext.Commands.JujuLog(commands.Error, "Could not patch k8s resources:", err.Error())
+		return
+	}
+
+	hookContext.Commands.JujuLog(commands.Info, "K8s resources patched")
 
 	pebble, err := client.New(&client.Config{Socket: socketPath})
 	if err != nil {

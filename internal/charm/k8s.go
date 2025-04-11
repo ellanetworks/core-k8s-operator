@@ -7,11 +7,24 @@ import (
 
 	netattachv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	netattachclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+)
+
+const (
+	N2InterfaceBridgeName             = "n2-br"
+	N2NetworkAttachmentDefinitionName = "core-n2"
+	N2InterfaceName                   = "n2"
+	N3InterfaceBridgeName             = "n3-br"
+	N3NetworkAttachmentDefinitionName = "core-n3"
+	N3InterfaceName                   = "n3"
+	N6InterfaceBridgeName             = "n6-br"
+	N6NetworkAttachmentDefinitionName = "core-n6"
+	N6InterfaceName                   = "n6"
 )
 
 type Address struct {
@@ -201,6 +214,175 @@ func (k *K8s) patchStatefulSet(opts *PatchStatefulSetOptions) error {
 	)
 	if err != nil {
 		return fmt.Errorf("error patching statefulset %q: %w", opts.Name, err)
+	}
+
+	return nil
+}
+
+type PatchK8sResourcesOptions struct {
+	N2IPAddress     string
+	N3IPAddress     string
+	N6IPAddress     string
+	StatefulsetName string
+	AppName         string
+	PodName         string
+	N2ServiceName   string
+}
+
+func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
+	createN2NADOpts := &CreateNADOptions{
+		Name: N2NetworkAttachmentDefinitionName,
+		NAD: &NetworkAttachmentDefinition{
+			CNIVersion: "0.3.1",
+			IPAM: IPAM{
+				Type: "static",
+				Addresses: []Address{
+					{
+						opts.N2IPAddress,
+					},
+				},
+			},
+			Capabilities: Capabilities{
+				Mac: true,
+			},
+			Type:   "bridge",
+			Bridge: N2InterfaceBridgeName,
+		},
+	}
+
+	err := k.createNad(createN2NADOpts)
+	if err != nil {
+		return fmt.Errorf("could not create n2 nad: %w", err)
+	}
+
+	createN3NADOpts := &CreateNADOptions{
+		Name: N3NetworkAttachmentDefinitionName,
+		NAD: &NetworkAttachmentDefinition{
+			CNIVersion: "0.3.1",
+			IPAM: IPAM{
+				Type: "static",
+				Addresses: []Address{
+					{
+						opts.N3IPAddress,
+					},
+				},
+			},
+			Capabilities: Capabilities{
+				Mac: true,
+			},
+			Type:   "bridge",
+			Bridge: N3InterfaceBridgeName,
+		},
+	}
+
+	err = k.createNad(createN3NADOpts)
+	if err != nil {
+		return fmt.Errorf("could not create n3 nad: %w", err)
+	}
+
+	createN6NADOpts := &CreateNADOptions{
+		Name: N6NetworkAttachmentDefinitionName,
+		NAD: &NetworkAttachmentDefinition{
+			CNIVersion: "0.3.1",
+			IPAM: IPAM{
+				Type: "static",
+				Addresses: []Address{
+					{
+						opts.N6IPAddress,
+					},
+				},
+			},
+			Capabilities: Capabilities{
+				Mac: true,
+			},
+			Type:   "bridge",
+			Bridge: N6InterfaceBridgeName,
+		},
+	}
+
+	err = k.createNad(createN6NADOpts)
+	if err != nil {
+		return fmt.Errorf("could not create n6 nad: %w", err)
+	}
+
+	patchStatefulSetOpts := &PatchStatefulSetOptions{
+		Name:          opts.StatefulsetName,
+		ContainerName: ContainerName,
+		PodName:       opts.PodName,
+		CapNetAdmin:   true,
+		Privileged:    true,
+		NetworkAnnotations: []*NetworkAnnotation{
+			{
+				Name:      N2NetworkAttachmentDefinitionName,
+				Interface: N2InterfaceName,
+			},
+			{
+				Name:      N3NetworkAttachmentDefinitionName,
+				Interface: N3InterfaceName,
+			},
+			{
+				Name:      N6NetworkAttachmentDefinitionName,
+				Interface: N6InterfaceName,
+			},
+		},
+	}
+
+	err = k.patchStatefulSet(patchStatefulSetOpts)
+	if err != nil {
+		return fmt.Errorf("could not patch statefulset: %w", err)
+	}
+
+	createN2ServiceOpts := &CreateN2ServiceOptions{
+		Name:    opts.N2ServiceName,
+		AppName: opts.AppName,
+	}
+
+	err = k.createN2Service(createN2ServiceOpts)
+	if err != nil {
+		return fmt.Errorf("could not create n2 service: %w", err)
+	}
+
+	return nil
+}
+
+type CreateN2ServiceOptions struct {
+	Name    string
+	AppName string
+}
+
+func (k *K8s) createN2Service(opts *CreateN2ServiceOptions) error {
+	_, err := k.Client.CoreV1().Services(k.Namespace).Get(context.TODO(), opts.Name, metav1.GetOptions{})
+	if err == nil {
+		return nil
+	}
+
+	if !apierrors.IsNotFound(err) {
+		return fmt.Errorf("error checking for existing Service: %w", err)
+	}
+
+	service := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      opts.Name,
+			Namespace: k.Namespace,
+		},
+		Spec: v1.ServiceSpec{
+			Selector: map[string]string{
+				"app.kubernetes.io/name": opts.AppName,
+			},
+			Ports: []v1.ServicePort{
+				{
+					Name:     "ngapp",
+					Port:     N2Port,
+					Protocol: "SCTP",
+				},
+			},
+			Type: "LoadBalancer",
+		},
+	}
+
+	_, err = k.Client.CoreV1().Services(k.Namespace).Create(context.TODO(), service, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("error creating Service: %w", err)
 	}
 
 	return nil
