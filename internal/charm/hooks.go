@@ -1,20 +1,24 @@
 package charm
 
 import (
+	"crypto/rand"
 	"fmt"
 	"strings"
 
-	"github.com/canonical/pebble/client"
+	pebbleClient "github.com/canonical/pebble/client"
+	coreClient "github.com/ellanetworks/core/client"
 	"github.com/gruyaume/goops"
 	"github.com/gruyaume/goops/commands"
 )
 
 const (
-	ContainerName = "core"
-	DBPath        = "/var/lib/core/core.db"
-	ConfigPath    = "/etc/core/core.yaml"
-	APIPort       = 2111
-	N2Port        = 38412
+	ContainerName        = "core"
+	DBPath               = "/var/lib/core/core.db"
+	ConfigPath           = "/etc/core/core.yaml"
+	APIPort              = 2111
+	N2Port               = 38412
+	CharmUserEmail       = "charm@ellanetworks.com"
+	CoreLoginSecretLabel = "ELLA_CORE_LOGIN"
 )
 
 func setPorts(hookContext *goops.HookContext) error {
@@ -49,6 +53,70 @@ func getPodName(hookContext *goops.HookContext) string {
 	podName := strings.Join(parts, "-")
 
 	return podName
+}
+
+func generateRandomPassword() (string, error) {
+	const passwordLength = 16
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+	b := make([]byte, passwordLength)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+
+	for i := range b {
+		b[i] = charset[b[i]%byte(len(charset))]
+	}
+
+	return string(b), nil
+}
+
+func createAdminAccount(hookContext *goops.HookContext) error {
+	coreClientConfig := &coreClient.Config{
+		BaseURL: "http://127.0.0.1:" + fmt.Sprint(APIPort),
+	}
+	client, err := coreClient.New(coreClientConfig)
+	if err != nil {
+		return fmt.Errorf("could not create core client: %w", err)
+	}
+
+	status, err := client.GetStatus()
+	if err != nil {
+		return fmt.Errorf("could not get status: %w", err)
+	}
+
+	if status.Initialized {
+		return nil
+	}
+
+	password, err := generateRandomPassword()
+	if err != nil {
+		return fmt.Errorf("could not generate random password: %w", err)
+	}
+
+	secretAddOpts := &commands.SecretAddOptions{
+		Label: CoreLoginSecretLabel,
+		Content: map[string]string{
+			"password": password,
+			"email":    CharmUserEmail,
+		},
+	}
+	_, err = hookContext.Commands.SecretAdd(secretAddOpts)
+	if err != nil {
+		return fmt.Errorf("could not add secret: %w", err)
+	}
+
+	createUserOpts := &coreClient.CreateUserOptions{
+		Email:    CharmUserEmail,
+		Password: password,
+		Role:     "admin",
+	}
+	err = client.CreateUser(createUserOpts)
+	if err != nil {
+		return fmt.Errorf("could not create user: %w", err)
+	}
+	return nil
 }
 
 func HandleDefaultHook(hookContext *goops.HookContext) {
@@ -130,7 +198,7 @@ func HandleDefaultHook(hookContext *goops.HookContext) {
 
 	hookContext.Commands.JujuLog(commands.Info, "K8s resources patched")
 
-	pebble, err := client.New(&client.Config{Socket: socketPath})
+	pebble, err := pebbleClient.New(&pebbleClient.Config{Socket: socketPath})
 	if err != nil {
 		hookContext.Commands.JujuLog(commands.Error, "Could not connect to pebble:", err.Error())
 		return
@@ -165,6 +233,14 @@ func HandleDefaultHook(hookContext *goops.HookContext) {
 	}
 
 	hookContext.Commands.JujuLog(commands.Info, "Pebble service started")
+
+	err = createAdminAccount(hookContext)
+	if err != nil {
+		hookContext.Commands.JujuLog(commands.Error, "Could not create admin account:", err.Error())
+		return
+	}
+
+	hookContext.Commands.JujuLog(commands.Info, "Admin account created")
 }
 
 func SetStatus(hookContext *goops.HookContext) {
