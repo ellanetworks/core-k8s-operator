@@ -115,7 +115,9 @@ func HandleDefaultHook(hookContext *goops.HookContext) {
 		N3IPAddress:     n3IPAddress,
 		N6IPAddress:     n6IPAddress,
 		StatefulsetName: appName,
+		ContainerName:   ContainerName,
 		AppName:         appName,
+		UnitName:        hookContext.Environment.JujuUnitName(),
 		PodName:         getPodName(hookContext),
 		N2ServiceName:   fmt.Sprintf("%s-external", appName),
 	}

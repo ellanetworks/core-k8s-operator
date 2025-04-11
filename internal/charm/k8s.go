@@ -139,9 +139,9 @@ func (k *K8s) createNad(opts *CreateNADOptions) error {
 }
 
 // Patch a statefulset with Multus annotation and NET_ADMIN capability
-// patchStatefulSet patches a statefulset to update the Multus network annotations
+// patchStatefulSetNetwork patches a statefulset to update the Multus network annotations
 // and to add NET_ADMIN capability to a container's security context if required.
-func (k *K8s) patchStatefulSet(opts *PatchStatefulSetOptions) error {
+func (k *K8s) patchStatefulSetNetwork(opts *PatchStatefulSetOptions) error {
 	// Marshal the network annotations into a JSON string.
 	annotationsBytes, err := json.Marshal(opts.NetworkAnnotations)
 	if err != nil {
@@ -219,12 +219,89 @@ func (k *K8s) patchStatefulSet(opts *PatchStatefulSetOptions) error {
 	return nil
 }
 
+type PatchStatefulSetVolumeOptions struct {
+	Name                 string
+	ContainerName        string
+	PodName              string
+	RequestedVolume      v1.Volume
+	RequestedVolumeMount v1.VolumeMount
+}
+
+// patchStatefulSetWithEbpfVolume retrieves the statefulset by name and patches it by adding the requested eBPF volume and volume mount only if they are not already present.
+func (k *K8s) patchStatefulSetWithEbpfVolume(opts *PatchStatefulSetVolumeOptions) error {
+	statefulset, err := k.Client.AppsV1().StatefulSets(k.Namespace).Get(context.TODO(), opts.Name, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return fmt.Errorf("statefulset %q not found in namespace %q", opts.Name, k.Namespace)
+		}
+
+		return fmt.Errorf("error getting statefulset %q: %w", opts.Name, err)
+	}
+
+	var container *v1.Container
+
+	for i := range statefulset.Spec.Template.Spec.Containers {
+		if statefulset.Spec.Template.Spec.Containers[i].Name == opts.ContainerName {
+			container = &statefulset.Spec.Template.Spec.Containers[i]
+			break
+		}
+	}
+
+	if container == nil {
+		return fmt.Errorf("could not find container %q in statefulset %q", opts.ContainerName, opts.Name)
+	}
+
+	modified := false
+
+	foundVolumeMount := false
+
+	for _, vm := range container.VolumeMounts {
+		if vm.Name == opts.RequestedVolumeMount.Name {
+			foundVolumeMount = true
+			break
+		}
+	}
+
+	if !foundVolumeMount {
+		container.VolumeMounts = append(container.VolumeMounts, opts.RequestedVolumeMount)
+		modified = true
+	}
+
+	foundVolume := false
+
+	for _, vol := range statefulset.Spec.Template.Spec.Volumes {
+		if vol.Name == opts.RequestedVolume.Name {
+			foundVolume = true
+			break
+		}
+	}
+
+	if !foundVolume {
+		statefulset.Spec.Template.Spec.Volumes = append(statefulset.Spec.Template.Spec.Volumes, opts.RequestedVolume)
+		modified = true
+	}
+
+	if !modified {
+		return nil
+	}
+
+	// Update the StatefulSet with the new volume and volume mount.
+	_, err = k.Client.AppsV1().StatefulSets(k.Namespace).Update(context.TODO(), statefulset, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error replacing StatefulSet %q: %w", opts.Name, err)
+	}
+
+	return nil
+}
+
 type PatchK8sResourcesOptions struct {
 	N2IPAddress     string
 	N3IPAddress     string
 	N6IPAddress     string
 	StatefulsetName string
 	AppName         string
+	ContainerName   string
+	UnitName        string
 	PodName         string
 	N2ServiceName   string
 }
@@ -327,9 +404,32 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 		},
 	}
 
-	err = k.patchStatefulSet(patchStatefulSetOpts)
+	err = k.patchStatefulSetNetwork(patchStatefulSetOpts)
 	if err != nil {
 		return fmt.Errorf("could not patch statefulset: %w", err)
+	}
+
+	patchStatefulsetVolOpts := &PatchStatefulSetVolumeOptions{
+		Name:          opts.StatefulsetName,
+		ContainerName: ContainerName,
+		PodName:       opts.PodName,
+		RequestedVolume: v1.Volume{
+			Name: "ebpf",
+			VolumeSource: v1.VolumeSource{
+				HostPath: &v1.HostPathVolumeSource{
+					Path: "/sys/fs/bpf",
+				},
+			},
+		},
+		RequestedVolumeMount: v1.VolumeMount{
+			Name:      "ebpf",
+			MountPath: "/sys/fs/bpf",
+		},
+	}
+
+	err = k.patchStatefulSetWithEbpfVolume(patchStatefulsetVolOpts)
+	if err != nil {
+		return fmt.Errorf("could not patch statefulset with eBPF volume: %w", err)
 	}
 
 	createN2ServiceOpts := &CreateN2ServiceOptions{
