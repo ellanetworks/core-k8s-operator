@@ -57,9 +57,11 @@ func getPodName(hookContext *goops.HookContext) string {
 
 func generateRandomPassword() (string, error) {
 	const passwordLength = 16
+
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 	b := make([]byte, passwordLength)
+
 	_, err := rand.Read(b)
 	if err != nil {
 		return "", err
@@ -76,6 +78,7 @@ func createAdminAccount(hookContext *goops.HookContext) error {
 	coreClientConfig := &coreClient.Config{
 		BaseURL: "http://127.0.0.1:" + fmt.Sprint(APIPort),
 	}
+
 	client, err := coreClient.New(coreClientConfig)
 	if err != nil {
 		return fmt.Errorf("could not create core client: %w", err)
@@ -102,6 +105,7 @@ func createAdminAccount(hookContext *goops.HookContext) error {
 			"email":    CharmUserEmail,
 		},
 	}
+
 	_, err = hookContext.Commands.SecretAdd(secretAddOpts)
 	if err != nil {
 		return fmt.Errorf("could not add secret: %w", err)
@@ -112,10 +116,12 @@ func createAdminAccount(hookContext *goops.HookContext) error {
 		Password: password,
 		Role:     "admin",
 	}
+
 	err = client.CreateUser(createUserOpts)
 	if err != nil {
 		return fmt.Errorf("could not create user: %w", err)
 	}
+
 	return nil
 }
 
