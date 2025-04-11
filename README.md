@@ -63,16 +63,3 @@ juju show-secret ELLA_CORE_LOGIN --reveal
 Open a browser and navigate to the Ella Core UI at `https://<IP_ADDRESS>:5002`. Use the username and password to log in.
 
 ![alt text](image.png)
-
-### 3. Integrate Ella Core with a 5G Radio simulator
-
-Deploy the gNodeB simulator and a router, and integrate the gNodeB simulator with Ella Core:
-
-```bash
-juju deploy sdcore-router-k8s router --channel=1.5/stable --trust
-juju deploy sdcore-gnbsim-k8s gnbsim --channel=1.6/edge --trust
-juju integrate ella-core:fiveg-n2 gnbsim:fiveg-n2
-juju integrate ella-core:fiveg_core_gnb gnbsim:fiveg_core_gnb
-```
-
-Wait for the application to be running. You can check the status with `juju status`.
