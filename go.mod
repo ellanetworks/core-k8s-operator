@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/canonical/pebble v1.20.0
-	github.com/ellanetworks/core v0.0.15
+	github.com/ellanetworks/core v0.0.16
 	github.com/gruyaume/goops v0.0.10
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.6
 	gopkg.in/yaml.v3 v3.0.1
@@ -36,10 +36,10 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/net v0.38.0 // indirect
+	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
 	golang.org/x/sys v0.32.0 // indirect
-	golang.org/x/term v0.30.0 // indirect
+	golang.org/x/term v0.31.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
