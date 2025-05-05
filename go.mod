@@ -3,7 +3,7 @@ module github.com/ellanetworks/core-k8s
 go 1.24.0
 
 require (
-	github.com/canonical/pebble v1.20.0
+	github.com/canonical/pebble v1.21.0
 	github.com/ellanetworks/core v0.0.17
 	github.com/gruyaume/goops v0.0.11
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.6
