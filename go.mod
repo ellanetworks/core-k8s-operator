@@ -5,12 +5,12 @@ go 1.24.0
 require (
 	github.com/canonical/pebble v1.21.0
 	github.com/ellanetworks/core v0.0.17
-	github.com/gruyaume/goops v0.0.11
+	github.com/gruyaume/goops v0.0.12
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.6
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.33.0
-	k8s.io/apimachinery v0.33.0
-	k8s.io/client-go v0.33.0
+	k8s.io/api v0.33.1
+	k8s.io/apimachinery v0.33.1
+	k8s.io/client-go v0.33.1
 )
 
 require (
