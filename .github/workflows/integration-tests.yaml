@@ -1,0 +1,33 @@
+name: Integration tests
+
+on:
+  workflow_call:
+    secrets:
+      GHCR_TOKEN:
+        required: true
+    inputs:
+      branch-name:
+        description: Name of the branch to checkout
+        required: false
+        type: string
+        default: ${{ github.ref }}
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch-name }}
+
+      - name: Install Canonical K8s
+        run: |
+          sudo rm -rf /run/containerd
+          sudo snap install k8s --channel=1.32-classic/stable --classic
+          sudo k8s bootstrap --timeout=5m
+          sudo k8s status --wait-ready
+
+      - name: Install Multus CNI
+        run: |
+          sudo k8s kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
