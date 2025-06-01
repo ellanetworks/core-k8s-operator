@@ -23,7 +23,8 @@ jobs:
 
       - name: Install Canonical K8s
         run: |
-          sudo rm -rf /run/containerd
+          sudo systemctl stop containerd || true
+          sudo rm -rf /run/containerd /var/lib/containerd /etc/containerd || true
           sudo snap install k8s --channel=1.32-classic/stable --classic
           sudo k8s bootstrap --timeout=5m
           sudo k8s status --wait-ready
