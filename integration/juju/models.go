@@ -63,7 +63,7 @@ func (j Juju) AddModel(opts *AddModelOptions) error {
 
 	_, err := j.Runner.Run(args...)
 	if err != nil {
-		return fmt.Errorf("failed to set status: %w", err)
+		return fmt.Errorf("failed to add model: %w", err)
 	}
 
 	return nil

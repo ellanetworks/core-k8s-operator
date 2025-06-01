@@ -10,6 +10,7 @@ import (
 const (
 	CharmPath     = "./ella-core-k8s_amd64.charm"
 	JujuModelName = "test-model"
+	CloudName     = "test-cloud"
 )
 
 func TestIntegration(t *testing.T) {
@@ -19,15 +20,21 @@ func TestIntegration(t *testing.T) {
 
 	jujuClient := juju.New()
 
-	jujuModels, err := jujuClient.ListModels()
+	err := jujuClient.AddK8s(&juju.AddK8sOptions{
+		Name:   CloudName,
+		Client: true,
+	})
 	if err != nil {
-		t.Fatalf("Failed to list models: %v", err)
+		t.Fatalf("Failed to add k8s: %v", err)
 	}
 
-	for _, model := range jujuModels {
-		if model.ShortName == JujuModelName {
-			t.Fatalf("Model %s already exists", JujuModelName)
-		}
+	t.Log("K8s added successfully")
+
+	err = jujuClient.Bootstrap(&juju.BootstrapOptions{
+		CloudName: CloudName,
+	})
+	if err != nil {
+		t.Fatalf("Failed to bootstrap: %v", err)
 	}
 
 	err = jujuClient.AddModel(&juju.AddModelOptions{

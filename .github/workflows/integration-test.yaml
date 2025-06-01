@@ -30,10 +30,11 @@ jobs:
           sudo snap install k8s --channel=1.32-classic/stable --classic
           sudo k8s bootstrap --timeout=5m
           sudo k8s status --wait-ready
+          sudo k8s kubectl config view --flatten --raw  > ~/.kube/config
 
       - name: Install Multus CNI
         run: |
-          sudo k8s kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
+          kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
 
       - name: Run integration tests
         run: |
