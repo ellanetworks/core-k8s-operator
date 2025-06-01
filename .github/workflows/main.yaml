@@ -31,6 +31,8 @@ jobs:
     secrets: inherit
 
   integration-test:
+    needs:
+      - build
     uses: ./.github/workflows/integration-test.yaml
     secrets: inherit
 

@@ -5,12 +5,6 @@ on:
     secrets:
       GHCR_TOKEN:
         required: true
-    inputs:
-      branch-name:
-        description: Name of the branch to checkout
-        required: false
-        type: string
-        default: ${{ github.ref }}
 
 jobs:
   integration-test:
@@ -18,8 +12,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Fetch Charm Under Test
+        uses: actions/download-artifact@v4
         with:
-          ref: ${{ inputs.branch-name }}
+          name: built-charm
+          path: built/
+
+      - name: Get Charm Under Test Path
+        id: charm-path
+        run: echo "charm_path=$(find built/ -name '*.charm' -type f -print)" >> $GITHUB_OUTPUT
 
       - name: Install Canonical K8s
         run: |
@@ -32,3 +34,7 @@ jobs:
       - name: Install Multus CNI
         run: |
           sudo k8s kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
+
+      - name: Run integration tests
+        run: |
+          INTEGRATION=1 go test ./...
