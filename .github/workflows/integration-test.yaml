@@ -33,14 +33,15 @@ jobs:
           mkdir -p ~/.kube
           sudo k8s kubectl config view --flatten --raw  > ~/.kube/config
 
-      - name: Install Juju
-        run: |
-          sudo snap install juju --channel=3/stable
-
       - name: Install Multus CNI
         run: |
           kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
 
+      - name: Install Juju
+        run: |
+          sudo snap install juju --channel=3/stable
+          juju version
+
       - name: Run integration tests
         run: |
-          INTEGRATION=1 go test ./...
+          INTEGRATION=1 go test ./... -v -timeout 1200s
