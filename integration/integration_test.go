@@ -45,24 +45,7 @@ func TestIntegration(t *testing.T) {
 
 	jujuClient := juju.New()
 
-	err := jujuClient.AddK8s(&juju.AddK8sOptions{
-		Name:   CloudName,
-		Client: true,
-	})
-	if err != nil {
-		t.Fatalf("Failed to add k8s: %v", err)
-	}
-
-	t.Log("K8s cloud is added")
-
-	err = jujuClient.Bootstrap(&juju.BootstrapOptions{
-		CloudName: CloudName,
-	})
-	if err != nil {
-		t.Fatalf("Failed to bootstrap: %v", err)
-	}
-
-	err = jujuClient.AddModel(&juju.AddModelOptions{
+	err := jujuClient.AddModel(&juju.AddModelOptions{
 		Name: JujuModelName,
 	})
 	if err != nil {

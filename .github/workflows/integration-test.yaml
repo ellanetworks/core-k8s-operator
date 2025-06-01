@@ -13,15 +13,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # - name: Fetch Charm Under Test
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: built-charm
-      #     path: built/
+      - name: Fetch Charm Under Test
+        uses: actions/download-artifact@v4
+        with:
+          name: built-charm
+          path: built/
 
-      # - name: Get Charm Under Test Path
-      #   id: charm-path
-      #   run: echo "charm_path=$(find built/ -name '*.charm' -type f -print)" >> $GITHUB_OUTPUT
+      - name: Get Charm Under Test Path
+        id: charm-path
+        run: echo "charm_path=$(find built/ -name '*.charm' -type f -print)" >> $GITHUB_OUTPUT
 
       - name: Setup Canonical K8S
         run: |
@@ -32,8 +32,6 @@ jobs:
           sudo k8s enable network dns load-balancer local-storage
           sudo k8s set load-balancer.cidrs="10.0.0.2-10.0.0.10"
           sudo k8s status --wait-ready --timeout 5m
-          mkdir -p ~/.kube
-          sudo k8s kubectl config view --raw > ~/.kube/config
 
       - name: Enable Multus addon
         continue-on-error: true
@@ -45,6 +43,8 @@ jobs:
       - name: Setup operator environment
         run: |
           sudo snap install juju --channel=3.6/stable
+          sudo k8s kubectl config view --raw | juju add-k8s test-cloud --client
+          juju bootstrap --debug --verbose test-cloud --model-default test-mode=true
 
       - name: Run integration tests
         run: |
