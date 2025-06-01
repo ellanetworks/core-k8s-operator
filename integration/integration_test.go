@@ -42,7 +42,6 @@ func TestIntegration(t *testing.T) {
 	err = jujuClient.Deploy(&juju.DeployOptions{
 		Charm: CharmPath,
 	})
-
 	if err != nil {
 		t.Fatalf("Failed to deploy: %v", err)
 	}
