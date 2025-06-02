@@ -11,7 +11,6 @@ import (
 
 const (
 	JujuModelName   = "test-model"
-	CloudName       = "test-cloud"
 	ApplicationName = "ella-core"
 	EllaCoreImage   = "ghcr.io/ellanetworks/ella-core:v0.0.15"
 )
