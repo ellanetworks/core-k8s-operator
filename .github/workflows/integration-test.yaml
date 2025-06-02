@@ -48,4 +48,5 @@ jobs:
 
       - name: Run integration tests
         run: |
+          export CHARM_PATH="${{ steps.charm-path.outputs.charm_path }}"
           INTEGRATION=1 go test ./... -v -timeout 1200s

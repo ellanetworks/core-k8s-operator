@@ -10,12 +10,20 @@ import (
 )
 
 const (
-	CharmPath       = "../ella-core-k8s_amd64.charm"
 	JujuModelName   = "test-model"
 	CloudName       = "test-cloud"
 	ApplicationName = "ella-core"
 	EllaCoreImage   = "ghcr.io/ellanetworks/ella-core:v0.0.15"
 )
+
+func getCharmPath() string {
+	charmPath := os.Getenv("CHARM_PATH")
+	if charmPath == "" {
+		return "./ella-core-k8s_amd64.charm"
+	}
+
+	return charmPath
+}
 
 func waitForActiveStatus(appName string, client *juju.Juju, timeout time.Duration) error {
 	start := time.Now()
@@ -55,7 +63,7 @@ func TestIntegration(t *testing.T) {
 	t.Log("Model is added")
 
 	err = jujuClient.Deploy(&juju.DeployOptions{
-		Charm:           CharmPath,
+		Charm:           getCharmPath(),
 		ApplicationName: ApplicationName,
 		Resources: map[string]string{
 			"core-image": EllaCoreImage,
