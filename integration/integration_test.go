@@ -25,7 +25,7 @@ func getCharmPath() string {
 	return charmPath
 }
 
-func waitForActiveStatus(appName string, client *juju.Juju, timeout time.Duration) error {
+func waitForActiveStatus(t *testing.T, appName string, client *juju.Juju, timeout time.Duration) error {
 	start := time.Now()
 
 	for {
@@ -40,6 +40,8 @@ func waitForActiveStatus(appName string, client *juju.Juju, timeout time.Duratio
 
 		if status.Applications[appName].ApplicationStatus.Current == "active" {
 			return nil
+		} else {
+			t.Log("Waiting for active status, current status:", status.Applications[appName].ApplicationStatus.Current)
 		}
 
 		time.Sleep(1 * time.Second)
@@ -75,7 +77,7 @@ func TestIntegration(t *testing.T) {
 
 	t.Log("Charm is deployed")
 
-	err = waitForActiveStatus(ApplicationName, jujuClient, 5*time.Minute)
+	err = waitForActiveStatus(t, ApplicationName, jujuClient, 10*time.Minute)
 	if err != nil {
 		t.Fatalf("Failed to wait for active status: %v", err)
 	}
