@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ellanetworks/core-k8s/integration/juju"
+	"github.com/gruyaume/go-juju/juju"
 )
 
 const (
