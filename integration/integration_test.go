@@ -41,7 +41,7 @@ func waitForActiveStatus(t *testing.T, appName string, client *juju.Juju, timeou
 		if status.Applications[appName].ApplicationStatus.Current == "active" {
 			return nil
 		} else {
-			t.Log("Waiting for active status, current status:", status.Applications[appName].ApplicationStatus.Current)
+			t.Log("Waiting for active status, current status:", status)
 		}
 
 		time.Sleep(1 * time.Second)
