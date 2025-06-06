@@ -8,7 +8,6 @@ import (
 	pebbleClient "github.com/canonical/pebble/client"
 	coreClient "github.com/ellanetworks/core/client"
 	"github.com/gruyaume/goops"
-	"github.com/gruyaume/goops/commands"
 )
 
 const (
@@ -21,17 +20,13 @@ const (
 	CoreLoginSecretLabel = "ELLA_CORE_LOGIN"
 )
 
-func setPorts(hookContext *goops.HookContext) error {
-	setPortOpts := &commands.SetPortsOptions{
-		Ports: []*commands.Port{
-			{
-				Port:     APIPort,
-				Protocol: "tcp",
-			},
+func setPorts() error {
+	err := goops.SetPorts([]*goops.Port{
+		{
+			Port:     APIPort,
+			Protocol: "tcp",
 		},
-	}
-
-	err := hookContext.Commands.SetPorts(setPortOpts)
+	})
 	if err != nil {
 		return fmt.Errorf("could not set ports: %w", err)
 	}
@@ -39,17 +34,19 @@ func setPorts(hookContext *goops.HookContext) error {
 	return nil
 }
 
-func getAppName(hookContext *goops.HookContext) string {
-	unitName := hookContext.Environment.JujuUnitName()
-	parts := strings.Split(unitName, "/")
+func getAppName() string {
+	env := goops.ReadEnv()
+
+	parts := strings.Split(env.UnitName, "/")
 	appName := parts[0]
 
 	return appName
 }
 
-func getPodName(hookContext *goops.HookContext) string {
-	unitName := hookContext.Environment.JujuUnitName()
-	parts := strings.Split(unitName, "/")
+func getPodName() string {
+	env := goops.ReadEnv()
+
+	parts := strings.Split(env.UnitName, "/")
 	podName := strings.Join(parts, "-")
 
 	return podName
@@ -74,7 +71,7 @@ func generateRandomPassword() (string, error) {
 	return string(b), nil
 }
 
-func createAdminAccount(hookContext *goops.HookContext) error {
+func createAdminAccount() error {
 	coreClientConfig := &coreClient.Config{
 		BaseURL: "http://127.0.0.1:" + fmt.Sprint(APIPort),
 	}
@@ -98,15 +95,13 @@ func createAdminAccount(hookContext *goops.HookContext) error {
 		return fmt.Errorf("could not generate random password: %w", err)
 	}
 
-	secretAddOpts := &commands.SecretAddOptions{
+	_, err = goops.AddSecret(&goops.AddSecretOptions{
 		Label: CoreLoginSecretLabel,
 		Content: map[string]string{
 			"password": password,
 			"email":    CharmUserEmail,
 		},
-	}
-
-	_, err = hookContext.Commands.SecretAdd(secretAddOpts)
+	})
 	if err != nil {
 		return fmt.Errorf("could not add secret: %w", err)
 	}
@@ -125,65 +120,53 @@ func createAdminAccount(hookContext *goops.HookContext) error {
 	return nil
 }
 
-func HandleDefaultHook(hookContext *goops.HookContext) {
-	isLeader, err := hookContext.Commands.IsLeader()
+func HandleDefaultHook() {
+	isLeader, err := goops.IsLeader()
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not check if unit is leader:", err.Error())
+		goops.LogErrorf("Could not check if unit is leader: %v", err)
 		return
 	}
 
 	if !isLeader {
-		hookContext.Commands.JujuLog(commands.Warning, "Unit is not leader")
+		goops.LogWarningf("Unit is not leader")
 		return
 	}
 
-	err = setPorts(hookContext)
+	err = setPorts()
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not set ports:", err.Error())
+		goops.LogErrorf("Could not set ports: %v", err)
 		return
 	}
 
-	hookContext.Commands.JujuLog(commands.Info, "Ports set")
+	goops.LogInfof("Ports set")
 
-	modelName := hookContext.Environment.JujuModelName()
+	env := goops.ReadEnv()
 
-	k8s, err := NewK8s(modelName)
+	k8s, err := NewK8s(env.ModelName)
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not create k8s client:", err.Error())
+		goops.LogErrorf("Could not create k8s client: %v", err)
 		return
 	}
 
-	configGetOpts := &commands.ConfigGetOptions{
-		Key: "n2-ip",
-	}
-
-	n2IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
+	n2IPAddress, err := goops.GetConfigString("n2-ip")
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not get n2-ip config:", err.Error())
+		goops.LogErrorf("Could not get n2-ip config: %v", err)
 		return
 	}
 
-	configGetOpts = &commands.ConfigGetOptions{
-		Key: "n3-ip",
-	}
-
-	n3IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
+	n3IPAddress, err := goops.GetConfigString("n3-ip")
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not get n3-ip config:", err.Error())
+		goops.LogErrorf("Could not get n3-ip config: %v", err)
 		return
 	}
 
-	configGetOpts = &commands.ConfigGetOptions{
-		Key: "n6-ip",
-	}
-
-	n6IPAddress, err := hookContext.Commands.ConfigGetString(configGetOpts)
+	n6IPAddress, err := goops.GetConfigString("n6-ip")
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not get n6-ip config:", err.Error())
+		goops.LogErrorf("Could not get n6-ip config: %v", err)
 		return
 	}
 
-	appName := getAppName(hookContext)
+	appName := getAppName()
 	patchK8sResourcesOpts := &PatchK8sResourcesOptions{
 		N2IPAddress:     n2IPAddress,
 		N3IPAddress:     n3IPAddress,
@@ -191,79 +174,74 @@ func HandleDefaultHook(hookContext *goops.HookContext) {
 		StatefulsetName: appName,
 		ContainerName:   ContainerName,
 		AppName:         appName,
-		UnitName:        hookContext.Environment.JujuUnitName(),
-		PodName:         getPodName(hookContext),
+		UnitName:        env.UnitName,
+		PodName:         getPodName(),
 		N2ServiceName:   fmt.Sprintf("%s-external", appName),
 	}
 
 	err = k8s.patchK8sResources(patchK8sResourcesOpts)
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not patch k8s resources:", err.Error())
+		goops.LogErrorf("Could not patch k8s resources: %v", err)
 		return
 	}
 
-	hookContext.Commands.JujuLog(commands.Info, "K8s resources patched")
+	goops.LogInfof("K8s resources patched")
 
 	pebble, err := pebbleClient.New(&pebbleClient.Config{Socket: socketPath})
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not connect to pebble:", err.Error())
+		goops.LogErrorf("Could not connect to pebble: %v", err)
 		return
 	}
 
 	expectedConfig, err := getExpectedConfig()
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not get expected config:", err.Error())
+		goops.LogErrorf("Could not get expected config: %v", err)
 		return
 	}
 
 	err = pushConfigFile(pebble, expectedConfig, ConfigPath)
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not push config file:", err.Error())
+		goops.LogErrorf("Could not push config file: %v", err)
 		return
 	}
 
-	hookContext.Commands.JujuLog(commands.Info, "Config file pushed")
+	goops.LogInfof("Config file pushed")
 
 	err = addPebbleLayer(pebble)
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not add pebble layer:", err.Error())
+		goops.LogErrorf("Could not add pebble layer: %v", err)
 		return
 	}
 
-	hookContext.Commands.JujuLog(commands.Info, "Pebble layer added")
+	goops.LogInfof("Pebble layer added")
 
 	err = startPebbleService(pebble)
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not start pebble service:", err.Error())
+		goops.LogErrorf("Could not start pebble service: %v", err)
 		return
 	}
 
-	hookContext.Commands.JujuLog(commands.Info, "Pebble service started")
+	goops.LogInfof("Pebble service started")
 
-	err = createAdminAccount(hookContext)
+	err = createAdminAccount()
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not create admin account:", err.Error())
+		goops.LogErrorf("Could not create admin account: %v", err)
 		return
 	}
 
-	hookContext.Commands.JujuLog(commands.Info, "Admin account created")
+	goops.LogInfof("Admin account created")
 }
 
-func SetStatus(hookContext *goops.HookContext) {
-	status := commands.StatusActive
+func SetStatus() {
+	status := goops.StatusActive
 
 	message := ""
 
-	statusSetOpts := &commands.StatusSetOptions{
-		Name:    status,
-		Message: message,
-	}
-
-	err := hookContext.Commands.StatusSet(statusSetOpts)
+	err := goops.SetUnitStatus(status, message)
 	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not set status:", err.Error())
+		goops.LogErrorf("Could not set status: %v", err)
 		return
 	}
 
-	hookContext.Commands.JujuLog(commands.Info, "Status set to active")
+	goops.LogInfof("Status set to %s", status)
 }
