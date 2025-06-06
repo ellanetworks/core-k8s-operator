@@ -20,20 +20,6 @@ const (
 	CoreLoginSecretLabel = "ELLA_CORE_LOGIN"
 )
 
-func setPorts() error {
-	err := goops.SetPorts([]*goops.Port{
-		{
-			Port:     APIPort,
-			Protocol: "tcp",
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("could not set ports: %w", err)
-	}
-
-	return nil
-}
-
 func getAppName() string {
 	env := goops.ReadEnv()
 
@@ -131,7 +117,12 @@ func Configure() error {
 		return nil
 	}
 
-	err = setPorts()
+	err = goops.SetPorts([]*goops.Port{
+		{
+			Port:     APIPort,
+			Protocol: "tcp",
+		},
+	})
 	if err != nil {
 		return fmt.Errorf("could not set ports: %w", err)
 	}
