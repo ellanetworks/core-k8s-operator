@@ -8,12 +8,11 @@ import (
 )
 
 func main() {
-	hookContext := goops.NewHookContext()
-	hookName := hookContext.Environment.JujuHookName()
+	env := goops.ReadEnv()
 
-	if hookName != "" {
-		charm.HandleDefaultHook(hookContext)
-		charm.SetStatus(hookContext)
+	if env.HookName != "" {
+		charm.HandleDefaultHook()
+		charm.SetStatus()
 		os.Exit(0)
 	}
 }
