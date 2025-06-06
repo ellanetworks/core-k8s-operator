@@ -120,22 +120,20 @@ func createAdminAccount() error {
 	return nil
 }
 
-func HandleDefaultHook() {
+func Configure() error {
 	isLeader, err := goops.IsLeader()
 	if err != nil {
-		goops.LogErrorf("Could not check if unit is leader: %v", err)
-		return
+		return fmt.Errorf("could not check if unit is leader: %w", err)
 	}
 
 	if !isLeader {
-		goops.LogWarningf("Unit is not leader")
-		return
+		_ = goops.SetUnitStatus(goops.StatusBlocked, "Unit is not leader")
+		return nil
 	}
 
 	err = setPorts()
 	if err != nil {
-		goops.LogErrorf("Could not set ports: %v", err)
-		return
+		return fmt.Errorf("could not set ports: %w", err)
 	}
 
 	goops.LogInfof("Ports set")
@@ -144,26 +142,22 @@ func HandleDefaultHook() {
 
 	k8s, err := NewK8s(env.ModelName)
 	if err != nil {
-		goops.LogErrorf("Could not create k8s client: %v", err)
-		return
+		return fmt.Errorf("could not create k8s client: %w", err)
 	}
 
 	n2IPAddress, err := goops.GetConfigString("n2-ip")
 	if err != nil {
-		goops.LogErrorf("Could not get n2-ip config: %v", err)
-		return
+		return fmt.Errorf("could not get n2-ip config: %w", err)
 	}
 
 	n3IPAddress, err := goops.GetConfigString("n3-ip")
 	if err != nil {
-		goops.LogErrorf("Could not get n3-ip config: %v", err)
-		return
+		return fmt.Errorf("could not get n3-ip config: %w", err)
 	}
 
 	n6IPAddress, err := goops.GetConfigString("n6-ip")
 	if err != nil {
-		goops.LogErrorf("Could not get n6-ip config: %v", err)
-		return
+		return fmt.Errorf("could not get n6-ip config: %w", err)
 	}
 
 	appName := getAppName()
@@ -181,67 +175,50 @@ func HandleDefaultHook() {
 
 	err = k8s.patchK8sResources(patchK8sResourcesOpts)
 	if err != nil {
-		goops.LogErrorf("Could not patch k8s resources: %v", err)
-		return
+		return fmt.Errorf("could not patch k8s resources: %w", err)
 	}
 
 	goops.LogInfof("K8s resources patched")
 
 	pebble, err := pebbleClient.New(&pebbleClient.Config{Socket: socketPath})
 	if err != nil {
-		goops.LogErrorf("Could not connect to pebble: %v", err)
-		return
+		return fmt.Errorf("could not connect to pebble: %w", err)
 	}
 
 	expectedConfig, err := getExpectedConfig()
 	if err != nil {
-		goops.LogErrorf("Could not get expected config: %v", err)
-		return
+		return fmt.Errorf("could not get expected config: %w", err)
 	}
 
 	err = pushConfigFile(pebble, expectedConfig, ConfigPath)
 	if err != nil {
-		goops.LogErrorf("Could not push config file: %v", err)
-		return
+		return fmt.Errorf("could not push config file: %w", err)
 	}
 
 	goops.LogInfof("Config file pushed")
 
 	err = addPebbleLayer(pebble)
 	if err != nil {
-		goops.LogErrorf("Could not add pebble layer: %v", err)
-		return
+		return fmt.Errorf("could not add pebble layer: %w", err)
 	}
 
 	goops.LogInfof("Pebble layer added")
 
 	err = startPebbleService(pebble)
 	if err != nil {
-		goops.LogErrorf("Could not start pebble service: %v", err)
-		return
+		return fmt.Errorf("could not start pebble service: %w", err)
 	}
 
 	goops.LogInfof("Pebble service started")
 
 	err = createAdminAccount()
 	if err != nil {
-		goops.LogErrorf("Could not create admin account: %v", err)
-		return
+		return fmt.Errorf("could not create admin account: %w", err)
 	}
 
 	goops.LogInfof("Admin account created")
-}
 
-func SetStatus() {
-	status := goops.StatusActive
+	_ = goops.SetUnitStatus(goops.StatusActive, "Charm is ready")
 
-	message := ""
-
-	err := goops.SetUnitStatus(status, message)
-	if err != nil {
-		goops.LogErrorf("Could not set status: %v", err)
-		return
-	}
-
-	goops.LogInfof("Status set to %s", status)
+	return nil
 }
