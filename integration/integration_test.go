@@ -12,7 +12,7 @@ import (
 const (
 	JujuModelName   = "test-model"
 	ApplicationName = "ella-core"
-	EllaCoreImage   = "ghcr.io/ellanetworks/ella-core:v0.0.15"
+	EllaCoreImage   = "ghcr.io/ellanetworks/ella-core:v0.0.18"
 )
 
 func getCharmPath() string {
