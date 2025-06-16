@@ -69,6 +69,7 @@ func TestIntegration(t *testing.T) {
 		Resources: map[string]string{
 			"core-image": EllaCoreImage,
 		},
+		Trust: true,
 	})
 	if err != nil {
 		t.Fatalf("Failed to deploy: %v", err)
