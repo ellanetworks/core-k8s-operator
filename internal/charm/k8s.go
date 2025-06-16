@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/gruyaume/goops"
 	netattachv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	netattachclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned"
 	v1 "k8s.io/api/core/v1"
@@ -332,6 +333,8 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 		return fmt.Errorf("could not create n2 nad: %w", err)
 	}
 
+	goops.LogInfof("Created N2 NetworkAttachmentDefinition %q", N2NetworkAttachmentDefinitionName)
+
 	createN3NADOpts := &CreateNADOptions{
 		Name: N3NetworkAttachmentDefinitionName,
 		NAD: &NetworkAttachmentDefinition{
@@ -357,6 +360,8 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 		return fmt.Errorf("could not create n3 nad: %w", err)
 	}
 
+	goops.LogInfof("Created N3 NetworkAttachmentDefinition %q", N3NetworkAttachmentDefinitionName)
+
 	createN6NADOpts := &CreateNADOptions{
 		Name: N6NetworkAttachmentDefinitionName,
 		NAD: &NetworkAttachmentDefinition{
@@ -381,6 +386,8 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 	if err != nil {
 		return fmt.Errorf("could not create n6 nad: %w", err)
 	}
+
+	goops.LogInfof("Created N6 NetworkAttachmentDefinition %q", N6NetworkAttachmentDefinitionName)
 
 	patchStatefulSetOpts := &PatchStatefulSetOptions{
 		Name:          opts.StatefulsetName,
@@ -409,6 +416,8 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 		return fmt.Errorf("could not patch statefulset: %w", err)
 	}
 
+	goops.LogInfof("Patched StatefulSet %q with network annotations", opts.StatefulsetName)
+
 	patchStatefulsetVolOpts := &PatchStatefulSetVolumeOptions{
 		Name:          opts.StatefulsetName,
 		ContainerName: ContainerName,
@@ -432,6 +441,8 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 		return fmt.Errorf("could not patch statefulset with eBPF volume: %w", err)
 	}
 
+	goops.LogInfof("Patched StatefulSet %q with eBPF volume", opts.StatefulsetName)
+
 	createN2ServiceOpts := &CreateN2ServiceOptions{
 		Name:    opts.N2ServiceName,
 		AppName: opts.AppName,
@@ -441,6 +452,8 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 	if err != nil {
 		return fmt.Errorf("could not create n2 service: %w", err)
 	}
+
+	goops.LogInfof("Created N2 Service %q", opts.N2ServiceName)
 
 	return nil
 }

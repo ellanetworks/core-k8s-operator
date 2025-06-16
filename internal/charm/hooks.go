@@ -106,6 +106,33 @@ func createAdminAccount() error {
 	return nil
 }
 
+type ConfigOptions struct {
+	LoggingLevel string `json:"logging-level"`
+	N2IPAddress  string `json:"n2-ip"`
+	N3IPAddress  string `json:"n3-ip"`
+	N6IPAddress  string `json:"n6-ip"`
+}
+
+func (c *ConfigOptions) Validate() error {
+	if c.LoggingLevel == "" {
+		return fmt.Errorf("logging-level is required")
+	}
+
+	if c.N2IPAddress == "" {
+		return fmt.Errorf("n2-ip is required")
+	}
+
+	if c.N3IPAddress == "" {
+		return fmt.Errorf("n3-ip is required")
+	}
+
+	if c.N6IPAddress == "" {
+		return fmt.Errorf("n6-ip is required")
+	}
+
+	return nil
+}
+
 func Configure() error {
 	isLeader, err := goops.IsLeader()
 	if err != nil {
@@ -136,26 +163,23 @@ func Configure() error {
 		return fmt.Errorf("could not create k8s client: %w", err)
 	}
 
-	n2IPAddress, err := goops.GetConfigString("n2-ip")
+	configOpts := ConfigOptions{}
+
+	err = goops.GetConfig(&configOpts)
 	if err != nil {
-		return fmt.Errorf("could not get n2-ip config: %w", err)
+		return fmt.Errorf("could not get config: %w", err)
 	}
 
-	n3IPAddress, err := goops.GetConfigString("n3-ip")
+	err = configOpts.Validate()
 	if err != nil {
-		return fmt.Errorf("could not get n3-ip config: %w", err)
-	}
-
-	n6IPAddress, err := goops.GetConfigString("n6-ip")
-	if err != nil {
-		return fmt.Errorf("could not get n6-ip config: %w", err)
+		return fmt.Errorf("invalid config: %w", err)
 	}
 
 	appName := getAppName()
 	patchK8sResourcesOpts := &PatchK8sResourcesOptions{
-		N2IPAddress:     n2IPAddress,
-		N3IPAddress:     n3IPAddress,
-		N6IPAddress:     n6IPAddress,
+		N2IPAddress:     configOpts.N2IPAddress,
+		N3IPAddress:     configOpts.N3IPAddress,
+		N6IPAddress:     configOpts.N6IPAddress,
 		StatefulsetName: appName,
 		ContainerName:   ContainerName,
 		AppName:         appName,
@@ -176,7 +200,7 @@ func Configure() error {
 		return fmt.Errorf("could not connect to pebble: %w", err)
 	}
 
-	expectedConfig, err := getExpectedConfig()
+	expectedConfig, err := getExpectedConfig(&configOpts)
 	if err != nil {
 		return fmt.Errorf("could not get expected config: %w", err)
 	}
