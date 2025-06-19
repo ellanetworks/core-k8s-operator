@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	pebbleClient "github.com/canonical/pebble/client"
 	"github.com/ellanetworks/core-k8s/internal/k8s"
 	coreClient "github.com/ellanetworks/core/client"
 	"github.com/gruyaume/goops"
@@ -187,9 +186,12 @@ func Configure(k8sProvider k8s.K8sProvider) error {
 
 	goops.LogInfof("K8s resources patched")
 
-	pebble, err := pebbleClient.New(&pebbleClient.Config{Socket: socketPath})
+	pebble := goops.Pebble("core")
+
+	_, err = pebble.SysInfo()
 	if err != nil {
-		return fmt.Errorf("could not connect to pebble: %w", err)
+		_ = goops.SetUnitStatus(goops.StatusWaiting, "Waiting for pebble to be ready")
+		return nil
 	}
 
 	expectedConfig, err := getExpectedConfig(&configOpts)

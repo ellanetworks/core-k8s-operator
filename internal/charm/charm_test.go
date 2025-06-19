@@ -104,3 +104,37 @@ func TestGivenInvalidConfigWhenConfigureThenStatusBlocked(t *testing.T) {
 		t.Errorf("expected status 'blocked', got '%s'", stateOut.UnitStatus)
 	}
 }
+
+func TestGivenCantConnectToPebbleWhenConfigureThenStatusIsWaiting(t *testing.T) {
+	ctx := goopstest.Context{
+		Charm: ConfigureWithFakeK8s,
+	}
+
+	stateIn := &goopstest.State{
+		Leader: true,
+		Config: map[string]string{
+			"logging-level": "debug",
+			"n2-ip":         "2.2.2.2",
+			"n3-ip":         "3.3.3.3",
+			"n6-ip":         "6.6.6.6",
+		},
+		Containers: []*goopstest.Container{
+			{
+				Name: "core",
+			},
+		},
+	}
+
+	stateOut, err := ctx.Run("install", stateIn)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if ctx.CharmErr != nil {
+		t.Fatalf("unexpected charm error: %v", ctx.CharmErr)
+	}
+
+	if stateOut.UnitStatus != "waiting" {
+		t.Errorf("expected status 'waiting', got '%s'", stateOut.UnitStatus)
+	}
+}
