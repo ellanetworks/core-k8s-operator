@@ -57,23 +57,7 @@ func generateRandomPassword() (string, error) {
 	return string(b), nil
 }
 
-func createAdminAccount() error {
-	client, err := coreClient.New(&coreClient.Config{
-		BaseURL: "http://127.0.0.1:" + fmt.Sprint(APIPort),
-	})
-	if err != nil {
-		return fmt.Errorf("could not create core client: %w", err)
-	}
-
-	status, err := client.GetStatus()
-	if err != nil {
-		return fmt.Errorf("could not get status: %w", err)
-	}
-
-	if status.Initialized {
-		return nil
-	}
-
+func createAdminAccount(core *coreClient.Client) error {
 	password, err := generateRandomPassword()
 	if err != nil {
 		return fmt.Errorf("could not generate random password: %w", err)
@@ -90,7 +74,7 @@ func createAdminAccount() error {
 		return fmt.Errorf("could not add secret: %w", err)
 	}
 
-	err = client.CreateUser(&coreClient.CreateUserOptions{
+	err = core.CreateUser(&coreClient.CreateUserOptions{
 		Email:    CharmUserEmail,
 		Password: password,
 		Role:     "admin",
@@ -221,12 +205,32 @@ func Configure(k8sProvider k8s.K8sProvider) error {
 
 	goops.LogInfof("Pebble service started")
 
-	err = createAdminAccount()
+	coreClient, err := coreClient.New(&coreClient.Config{
+		BaseURL: "http://127.0.0.1:" + fmt.Sprint(APIPort),
+	})
 	if err != nil {
-		return fmt.Errorf("could not create admin account: %w", err)
+		return fmt.Errorf("could not create core client: %w", err)
 	}
 
-	goops.LogInfof("Admin account created")
+	status, err := coreClient.GetStatus()
+	if err != nil {
+		_ = goops.SetUnitStatus(goops.StatusWaiting, "Waiting to be able to access core API")
+
+		goops.LogDebugf("Could not get core status: %v", err)
+
+		return nil
+	}
+
+	if !status.Initialized {
+		goops.LogInfof("Core is not initialized, initializing now")
+
+		err = createAdminAccount(coreClient)
+		if err != nil {
+			return fmt.Errorf("could not create admin account: %w", err)
+		}
+
+		goops.LogInfof("Admin account created")
+	}
 
 	_ = goops.SetUnitStatus(goops.StatusActive, "Charm is ready")
 
