@@ -231,6 +231,8 @@ func Configure(k8sClient k8s.Client) error {
 		return fmt.Errorf("failed to resolve FQDN: %w", err)
 	}
 
+	fqdn = strings.TrimSuffix(fqdn, ".")
+
 	coreClient, err := coreClient.New(&coreClient.Config{
 		BaseURL: fmt.Sprintf("http://%s:%d", fqdn, APIPort),
 	})
