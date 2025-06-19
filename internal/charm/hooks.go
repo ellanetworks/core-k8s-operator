@@ -3,6 +3,8 @@ package charm
 import (
 	"crypto/rand"
 	"fmt"
+	"net"
+	"os"
 	"strings"
 
 	"github.com/ellanetworks/core-k8s/internal/k8s"
@@ -113,6 +115,25 @@ func (c *ConfigOptions) Validate() error {
 	return nil
 }
 
+func getFQDN() (string, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+
+	addrs, err := net.LookupHost(hostname)
+	if err != nil || len(addrs) == 0 {
+		return hostname, nil
+	}
+
+	names, err := net.LookupAddr(addrs[0])
+	if err != nil || len(names) == 0 {
+		return hostname, nil
+	}
+
+	return names[0], nil
+}
+
 func Configure(k8sClient k8s.Client) error {
 	isLeader, err := goops.IsLeader()
 	if err != nil {
@@ -205,8 +226,13 @@ func Configure(k8sClient k8s.Client) error {
 
 	goops.LogInfof("Pebble service started")
 
+	fqdn, err := getFQDN()
+	if err != nil {
+		return fmt.Errorf("failed to resolve FQDN: %w", err)
+	}
+
 	coreClient, err := coreClient.New(&coreClient.Config{
-		BaseURL: "http://127.0.0.1:" + fmt.Sprint(APIPort),
+		BaseURL: fmt.Sprintf("http://%s:%d", fqdn, APIPort),
 	})
 	if err != nil {
 		return fmt.Errorf("could not create core client: %w", err)
