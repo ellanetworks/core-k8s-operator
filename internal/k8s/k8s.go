@@ -1,11 +1,10 @@
-package charm
+package k8s
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 
-	"github.com/gruyaume/goops"
 	netattachv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	netattachclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned"
 	v1 "k8s.io/api/core/v1"
@@ -59,22 +58,20 @@ type NetworkAnnotation struct {
 	Interface string `json:"interface"`
 }
 
-type PatchStatefulSetOptions struct {
-	Name               string
-	ContainerName      string
-	PodName            string
-	CapNetAdmin        bool
-	Privileged         bool
-	NetworkAnnotations []*NetworkAnnotation
-}
-
-type K8s struct {
+// RealK8s implements the K8sProvider interface using a real Kubernetes client.
+type RealK8s struct {
 	Namespace       string
 	NetAttachClient *netattachclient.Clientset
 	Client          *kubernetes.Clientset
 }
 
-func NewK8s(namespace string) (*K8s, error) {
+// K8sProvider defines the interface for Kubernetes operations.
+type K8sProvider interface {
+	PatchK8sResources(opts *PatchK8sResourcesOptions) error
+}
+
+// New creates a new instance of RealK8s using in-cluster configuration.
+func New(namespace string) (K8sProvider, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("error getting in-cluster config: %w", err)
@@ -90,7 +87,7 @@ func NewK8s(namespace string) (*K8s, error) {
 		return nil, fmt.Errorf("error creating Kubernetes client: %w", err)
 	}
 
-	return &K8s{
+	return RealK8s{
 		Namespace:       namespace,
 		NetAttachClient: netAttachClient,
 		Client:          client,
@@ -99,7 +96,7 @@ func NewK8s(namespace string) (*K8s, error) {
 
 // createNad creates the NetworkAttachmentDefinition in the specified namespace.
 // If the NAD already exists, it does not attempt to create it again.
-func (k *K8s) createNad(opts *CreateNADOptions) error {
+func (k RealK8s) createNad(opts *CreateNADOptions) error {
 	_, err := k.NetAttachClient.
 		K8sCniCncfIoV1().
 		NetworkAttachmentDefinitions(k.Namespace).
@@ -139,10 +136,19 @@ func (k *K8s) createNad(opts *CreateNADOptions) error {
 	return nil
 }
 
+type PatchStatefulSetOptions struct {
+	Name               string
+	ContainerName      string
+	PodName            string
+	CapNetAdmin        bool
+	Privileged         bool
+	NetworkAnnotations []*NetworkAnnotation
+}
+
 // Patch a statefulset with Multus annotation and NET_ADMIN capability
 // patchStatefulSetNetwork patches a statefulset to update the Multus network annotations
 // and to add NET_ADMIN capability to a container's security context if required.
-func (k *K8s) patchStatefulSetNetwork(opts *PatchStatefulSetOptions) error {
+func (k RealK8s) patchStatefulSetNetwork(opts *PatchStatefulSetOptions) error {
 	// Marshal the network annotations into a JSON string.
 	annotationsBytes, err := json.Marshal(opts.NetworkAnnotations)
 	if err != nil {
@@ -229,7 +235,7 @@ type PatchStatefulSetVolumeOptions struct {
 }
 
 // patchStatefulSetWithEbpfVolume retrieves the statefulset by name and patches it by adding the requested eBPF volume and volume mount only if they are not already present.
-func (k *K8s) patchStatefulSetWithEbpfVolume(opts *PatchStatefulSetVolumeOptions) error {
+func (k RealK8s) patchStatefulSetWithEbpfVolume(opts *PatchStatefulSetVolumeOptions) error {
 	statefulset, err := k.Client.AppsV1().StatefulSets(k.Namespace).Get(context.TODO(), opts.Name, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -307,7 +313,7 @@ type PatchK8sResourcesOptions struct {
 	N2ServiceName   string
 }
 
-func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
+func (k RealK8s) PatchK8sResources(opts *PatchK8sResourcesOptions) error {
 	createN2NADOpts := &CreateNADOptions{
 		Name: N2NetworkAttachmentDefinitionName,
 		NAD: &NetworkAttachmentDefinition{
@@ -332,8 +338,6 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 	if err != nil {
 		return fmt.Errorf("could not create n2 nad: %w", err)
 	}
-
-	goops.LogInfof("Created N2 NetworkAttachmentDefinition %q", N2NetworkAttachmentDefinitionName)
 
 	createN3NADOpts := &CreateNADOptions{
 		Name: N3NetworkAttachmentDefinitionName,
@@ -360,8 +364,6 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 		return fmt.Errorf("could not create n3 nad: %w", err)
 	}
 
-	goops.LogInfof("Created N3 NetworkAttachmentDefinition %q", N3NetworkAttachmentDefinitionName)
-
 	createN6NADOpts := &CreateNADOptions{
 		Name: N6NetworkAttachmentDefinitionName,
 		NAD: &NetworkAttachmentDefinition{
@@ -387,11 +389,9 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 		return fmt.Errorf("could not create n6 nad: %w", err)
 	}
 
-	goops.LogInfof("Created N6 NetworkAttachmentDefinition %q", N6NetworkAttachmentDefinitionName)
-
 	patchStatefulSetOpts := &PatchStatefulSetOptions{
 		Name:          opts.StatefulsetName,
-		ContainerName: ContainerName,
+		ContainerName: opts.ContainerName,
 		PodName:       opts.PodName,
 		CapNetAdmin:   true,
 		Privileged:    true,
@@ -416,11 +416,9 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 		return fmt.Errorf("could not patch statefulset: %w", err)
 	}
 
-	goops.LogInfof("Patched StatefulSet %q with network annotations", opts.StatefulsetName)
-
 	patchStatefulsetVolOpts := &PatchStatefulSetVolumeOptions{
 		Name:          opts.StatefulsetName,
-		ContainerName: ContainerName,
+		ContainerName: opts.ContainerName,
 		PodName:       opts.PodName,
 		RequestedVolume: v1.Volume{
 			Name: "ebpf",
@@ -441,8 +439,6 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 		return fmt.Errorf("could not patch statefulset with eBPF volume: %w", err)
 	}
 
-	goops.LogInfof("Patched StatefulSet %q with eBPF volume", opts.StatefulsetName)
-
 	createN2ServiceOpts := &CreateN2ServiceOptions{
 		Name:    opts.N2ServiceName,
 		AppName: opts.AppName,
@@ -453,17 +449,16 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 		return fmt.Errorf("could not create n2 service: %w", err)
 	}
 
-	goops.LogInfof("Created N2 Service %q", opts.N2ServiceName)
-
 	return nil
 }
 
 type CreateN2ServiceOptions struct {
 	Name    string
 	AppName string
+	N2Port  int32
 }
 
-func (k *K8s) createN2Service(opts *CreateN2ServiceOptions) error {
+func (k RealK8s) createN2Service(opts *CreateN2ServiceOptions) error {
 	_, err := k.Client.CoreV1().Services(k.Namespace).Get(context.TODO(), opts.Name, metav1.GetOptions{})
 	if err == nil {
 		return nil
@@ -485,7 +480,7 @@ func (k *K8s) createN2Service(opts *CreateN2ServiceOptions) error {
 			Ports: []v1.ServicePort{
 				{
 					Name:     "ngapp",
-					Port:     N2Port,
+					Port:     opts.N2Port,
 					Protocol: "SCTP",
 				},
 			},

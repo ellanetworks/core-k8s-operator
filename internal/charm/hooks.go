@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	pebbleClient "github.com/canonical/pebble/client"
+	"github.com/ellanetworks/core-k8s/internal/k8s"
 	coreClient "github.com/ellanetworks/core/client"
 	"github.com/gruyaume/goops"
 )
@@ -58,11 +59,9 @@ func generateRandomPassword() (string, error) {
 }
 
 func createAdminAccount() error {
-	coreClientConfig := &coreClient.Config{
+	client, err := coreClient.New(&coreClient.Config{
 		BaseURL: "http://127.0.0.1:" + fmt.Sprint(APIPort),
-	}
-
-	client, err := coreClient.New(coreClientConfig)
+	})
 	if err != nil {
 		return fmt.Errorf("could not create core client: %w", err)
 	}
@@ -92,13 +91,11 @@ func createAdminAccount() error {
 		return fmt.Errorf("could not add secret: %w", err)
 	}
 
-	createUserOpts := &coreClient.CreateUserOptions{
+	err = client.CreateUser(&coreClient.CreateUserOptions{
 		Email:    CharmUserEmail,
 		Password: password,
 		Role:     "admin",
-	}
-
-	err = client.CreateUser(createUserOpts)
+	})
 	if err != nil {
 		return fmt.Errorf("could not create user: %w", err)
 	}
@@ -133,7 +130,7 @@ func (c *ConfigOptions) Validate() error {
 	return nil
 }
 
-func Configure() error {
+func Configure(k8sProvider k8s.K8sProvider) error {
 	isLeader, err := goops.IsLeader()
 	if err != nil {
 		return fmt.Errorf("could not check if unit is leader: %w", err)
@@ -156,13 +153,6 @@ func Configure() error {
 
 	goops.LogInfof("Ports set")
 
-	env := goops.ReadEnv()
-
-	k8s, err := NewK8s(env.ModelName)
-	if err != nil {
-		return fmt.Errorf("could not create k8s client: %w", err)
-	}
-
 	configOpts := ConfigOptions{}
 
 	err = goops.GetConfig(&configOpts)
@@ -172,11 +162,15 @@ func Configure() error {
 
 	err = configOpts.Validate()
 	if err != nil {
-		return fmt.Errorf("invalid config: %w", err)
+		_ = goops.SetUnitStatus(goops.StatusBlocked, "Invalid config: "+err.Error())
+		return nil
 	}
 
 	appName := getAppName()
-	patchK8sResourcesOpts := &PatchK8sResourcesOptions{
+
+	env := goops.ReadEnv()
+
+	err = k8sProvider.PatchK8sResources(&k8s.PatchK8sResourcesOptions{
 		N2IPAddress:     configOpts.N2IPAddress,
 		N3IPAddress:     configOpts.N3IPAddress,
 		N6IPAddress:     configOpts.N6IPAddress,
@@ -186,9 +180,7 @@ func Configure() error {
 		UnitName:        env.UnitName,
 		PodName:         getPodName(),
 		N2ServiceName:   fmt.Sprintf("%s-external", appName),
-	}
-
-	err = k8s.patchK8sResources(patchK8sResourcesOpts)
+	})
 	if err != nil {
 		return fmt.Errorf("could not patch k8s resources: %w", err)
 	}
