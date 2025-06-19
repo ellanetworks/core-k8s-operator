@@ -6,12 +6,12 @@ require (
 	github.com/canonical/pebble v1.22.2
 	github.com/ellanetworks/core v0.0.18
 	github.com/gruyaume/go-juju v0.0.0-20250602205456-666aa4ad76b6
-	github.com/gruyaume/goops v0.0.16
+	github.com/gruyaume/goops v0.0.21
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.6
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.33.1
-	k8s.io/apimachinery v0.33.1
-	k8s.io/client-go v0.33.1
+	k8s.io/api v0.33.2
+	k8s.io/apimachinery v0.33.2
+	k8s.io/client-go v0.33.2
 )
 
 require (
