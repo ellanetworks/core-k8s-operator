@@ -71,7 +71,7 @@ func getExpectedConfig(config *ConfigOptions) ([]byte, error) {
 		},
 		Interfaces: InterfacesConfig{
 			N2: InterfaceConfig{
-				Name: "lo",
+				Name: "n2",
 				Port: N2Port,
 			},
 			N3: InterfaceConfig{
