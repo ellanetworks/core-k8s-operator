@@ -179,6 +179,7 @@ func Configure(k8sProvider k8s.K8sProvider) error {
 		UnitName:        env.UnitName,
 		PodName:         getPodName(),
 		N2ServiceName:   fmt.Sprintf("%s-external", appName),
+		N2Port:          N2Port,
 	})
 	if err != nil {
 		return fmt.Errorf("could not patch k8s resources: %w", err)

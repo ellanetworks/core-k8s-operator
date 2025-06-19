@@ -311,6 +311,7 @@ type PatchK8sResourcesOptions struct {
 	UnitName        string
 	PodName         string
 	N2ServiceName   string
+	N2Port          int32
 }
 
 func (k RealK8s) PatchK8sResources(opts *PatchK8sResourcesOptions) error {
@@ -442,6 +443,7 @@ func (k RealK8s) PatchK8sResources(opts *PatchK8sResourcesOptions) error {
 	createN2ServiceOpts := &CreateN2ServiceOptions{
 		Name:    opts.N2ServiceName,
 		AppName: opts.AppName,
+		N2Port:  opts.N2Port,
 	}
 
 	err = k.createN2Service(createN2ServiceOpts)
