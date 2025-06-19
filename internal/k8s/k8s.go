@@ -66,12 +66,12 @@ type RealK8s struct {
 }
 
 // K8sProvider defines the interface for Kubernetes operations.
-type K8sProvider interface {
-	PatchK8sResources(opts *PatchK8sResourcesOptions) error
+type Client interface {
+	PatchResources(opts *PatchResourcesOptions) error
 }
 
 // New creates a new instance of RealK8s using in-cluster configuration.
-func New(namespace string) (K8sProvider, error) {
+func New(namespace string) (Client, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("error getting in-cluster config: %w", err)
@@ -301,7 +301,7 @@ func (k RealK8s) patchStatefulSetWithEbpfVolume(opts *PatchStatefulSetVolumeOpti
 	return nil
 }
 
-type PatchK8sResourcesOptions struct {
+type PatchResourcesOptions struct {
 	N2IPAddress     string
 	N3IPAddress     string
 	N6IPAddress     string
@@ -314,7 +314,7 @@ type PatchK8sResourcesOptions struct {
 	N2Port          int32
 }
 
-func (k RealK8s) PatchK8sResources(opts *PatchK8sResourcesOptions) error {
+func (k RealK8s) PatchResources(opts *PatchResourcesOptions) error {
 	createN2NADOpts := &CreateNADOptions{
 		Name: N2NetworkAttachmentDefinitionName,
 		NAD: &NetworkAttachmentDefinition{

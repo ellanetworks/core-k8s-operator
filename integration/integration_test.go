@@ -79,8 +79,25 @@ func TestIntegration(t *testing.T) {
 
 	err = waitForActiveStatus(t, ApplicationName, jujuClient, 10*time.Minute)
 	if err != nil {
-		t.Fatalf("Failed to wait for active status: %v", err)
+		printDebugLogs(t, jujuClient)
+		t.Fatalf("Failed to get active status: %v", err)
 	}
 
+	printDebugLogs(t, jujuClient)
+
 	t.Log("Charm is active")
+}
+
+func printDebugLogs(t *testing.T, jujuClient *juju.Juju) {
+	os.Stdout.Write([]byte("----Juju Debug Logs----\n"))
+
+	err := jujuClient.PrintDebugLog(&juju.PrintDebugLogOptions{
+		Replay: true,
+	})
+	if err != nil {
+		t.Logf("Failed to capture logs: %v", err)
+		return
+	}
+
+	os.Stdout.Write([]byte("\n----End of Debug Logs----\n"))
 }

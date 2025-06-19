@@ -11,7 +11,7 @@ import (
 
 type FakeK8s struct{}
 
-func (f FakeK8s) PatchK8sResources(*k8s.PatchK8sResourcesOptions) error {
+func (f FakeK8s) PatchResources(*k8s.PatchResourcesOptions) error {
 	return nil
 }
 

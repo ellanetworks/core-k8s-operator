@@ -113,7 +113,7 @@ func (c *ConfigOptions) Validate() error {
 	return nil
 }
 
-func Configure(k8sProvider k8s.K8sProvider) error {
+func Configure(k8sClient k8s.Client) error {
 	isLeader, err := goops.IsLeader()
 	if err != nil {
 		return fmt.Errorf("could not check if unit is leader: %w", err)
@@ -153,7 +153,7 @@ func Configure(k8sProvider k8s.K8sProvider) error {
 
 	env := goops.ReadEnv()
 
-	err = k8sProvider.PatchK8sResources(&k8s.PatchK8sResourcesOptions{
+	err = k8sClient.PatchResources(&k8s.PatchResourcesOptions{
 		N2IPAddress:     configOpts.N2IPAddress,
 		N3IPAddress:     configOpts.N3IPAddress,
 		N6IPAddress:     configOpts.N6IPAddress,
