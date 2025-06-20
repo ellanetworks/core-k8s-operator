@@ -14,6 +14,7 @@ import (
 
 func PrintKubectlLogs(t *testing.T, namespace, podName, containerName string) {
 	kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
+
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		t.Logf("Failed to load kubeconfig: %v", err)
@@ -37,16 +38,20 @@ func PrintKubectlLogs(t *testing.T, namespace, podName, containerName string) {
 	}
 	defer logs.Close()
 
-	t.Logf("---- Logs for pod %s ----", podName)
+	os.Stdout.Write([]byte("---- Logs for pod " + podName + " ----\n"))
+
 	buf := make([]byte, 4096)
+
 	for {
 		n, err := logs.Read(buf)
 		if n > 0 {
 			os.Stdout.Write(buf[:n])
 		}
+
 		if err != nil {
 			break
 		}
 	}
-	t.Logf("---- End of logs for pod %s ----", podName)
+
+	os.Stdout.Write([]byte("\n---- End of Logs ----\n"))
 }
