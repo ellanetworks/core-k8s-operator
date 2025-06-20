@@ -80,10 +80,12 @@ func TestIntegration(t *testing.T) {
 	err = waitForActiveStatus(t, ApplicationName, jujuClient, 10*time.Minute)
 	if err != nil {
 		printDebugLogs(t, jujuClient)
+		PrintKubectlLogs(t, JujuModelName, ApplicationName+"-0", "core")
 		t.Fatalf("Failed to get active status: %v", err)
 	}
 
 	printDebugLogs(t, jujuClient)
+	PrintKubectlLogs(t, JujuModelName, ApplicationName+"-0", "core")
 
 	t.Log("Charm is active")
 }
