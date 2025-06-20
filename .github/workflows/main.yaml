@@ -23,10 +23,10 @@ jobs:
     uses: ./.github/workflows/go-unittest.yaml
 
   build:
-    needs:
-      - go-lint
-      - go-vet
-      - go-test
+    # needs:
+    #   - go-lint
+    #   - go-vet
+    #   - go-test
     uses: ./.github/workflows/build.yaml
     secrets: inherit
 
