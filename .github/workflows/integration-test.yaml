@@ -23,16 +23,26 @@ jobs:
         id: charm-path
         run: echo "charm_path=$(find built/ -name '*.charm' -type f -print)" >> $GITHUB_OUTPUT
 
-      - name: Setup Canonical K8S
+      - name: Setup MicroK8s
         id: canonical-k8s
         run: |
-          sudo snap install k8s --classic --channel=1.32-classic/stable
-          cat << EOF | sudo k8s bootstrap --file -
-          containerd-base-dir: /opt/containerd
-          EOF
-          sudo k8s enable network dns load-balancer local-storage
-          sudo k8s set load-balancer.cidrs="10.0.0.2-10.0.0.10"
-          sudo k8s status --wait-ready --timeout 5m
+          echo "Installing snaps"
+          sudo snap install microk8s --channel=1.31/stable --classic
+          sudo snap install kubectl --classic
+
+          echo "Starting MicroK8s"
+          sudo microk8s status --wait-ready --timeout=600 
+
+          echo "Enabling MicroK8s addons"
+          sudo microk8s enable hostpath-storage
+
+          echo "Enabling MicroK8s Multus addons"
+          sudo microk8s addons repo add community https://github.com/canonical/microk8s-community-addons --reference feat/strict-fix-multus
+          sudo microk8s enable multus
+          sudo microk8s kubectl -n kube-system rollout status daemonset/kube-multus-ds
+          sudo microk8s kubectl auth can-i create network-attachment-definitions
+
+          echo "Configuring kubectl"
           mkdir -p ~/.kube
           sudo k8s config > ~/.kube/config
           echo "kubeconfig=$(sudo k8s config | base64 -w 0)" >> $GITHUB_OUTPUT
