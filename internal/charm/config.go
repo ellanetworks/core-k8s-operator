@@ -55,11 +55,11 @@ type ServiceConfig struct {
 	Startup  string `yaml:"startup"`
 }
 
-func getExpectedConfig() ([]byte, error) {
+func getExpectedConfig(config *ConfigOptions) ([]byte, error) {
 	coreConfig := CoreConfig{
 		Logging: LoggingConfig{
 			System: SystemLoggingConfig{
-				Level:  "info",
+				Level:  config.LoggingLevel,
 				Output: "stdout",
 			},
 			Audit: AuditLoggingConfig{
@@ -71,7 +71,7 @@ func getExpectedConfig() ([]byte, error) {
 		},
 		Interfaces: InterfacesConfig{
 			N2: InterfaceConfig{
-				Name: "lo",
+				Name: "n2",
 				Port: N2Port,
 			},
 			N3: InterfaceConfig{

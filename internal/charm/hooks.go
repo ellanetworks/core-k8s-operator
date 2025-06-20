@@ -3,9 +3,11 @@ package charm
 import (
 	"crypto/rand"
 	"fmt"
+	"net"
+	"os"
 	"strings"
 
-	pebbleClient "github.com/canonical/pebble/client"
+	"github.com/ellanetworks/core-k8s/internal/k8s"
 	coreClient "github.com/ellanetworks/core/client"
 	"github.com/gruyaume/goops"
 )
@@ -19,20 +21,6 @@ const (
 	CharmUserEmail       = "charm@ellanetworks.com"
 	CoreLoginSecretLabel = "ELLA_CORE_LOGIN"
 )
-
-func setPorts() error {
-	err := goops.SetPorts([]*goops.Port{
-		{
-			Port:     APIPort,
-			Protocol: "tcp",
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("could not set ports: %w", err)
-	}
-
-	return nil
-}
 
 func getAppName() string {
 	env := goops.ReadEnv()
@@ -71,25 +59,7 @@ func generateRandomPassword() (string, error) {
 	return string(b), nil
 }
 
-func createAdminAccount() error {
-	coreClientConfig := &coreClient.Config{
-		BaseURL: "http://127.0.0.1:" + fmt.Sprint(APIPort),
-	}
-
-	client, err := coreClient.New(coreClientConfig)
-	if err != nil {
-		return fmt.Errorf("could not create core client: %w", err)
-	}
-
-	status, err := client.GetStatus()
-	if err != nil {
-		return fmt.Errorf("could not get status: %w", err)
-	}
-
-	if status.Initialized {
-		return nil
-	}
-
+func createAdminAccount(core *coreClient.Client) error {
 	password, err := generateRandomPassword()
 	if err != nil {
 		return fmt.Errorf("could not generate random password: %w", err)
@@ -106,13 +76,11 @@ func createAdminAccount() error {
 		return fmt.Errorf("could not add secret: %w", err)
 	}
 
-	createUserOpts := &coreClient.CreateUserOptions{
+	err = core.CreateUser(&coreClient.CreateUserOptions{
 		Email:    CharmUserEmail,
 		Password: password,
 		Role:     "admin",
-	}
-
-	err = client.CreateUser(createUserOpts)
+	})
 	if err != nil {
 		return fmt.Errorf("could not create user: %w", err)
 	}
@@ -120,128 +88,179 @@ func createAdminAccount() error {
 	return nil
 }
 
-func HandleDefaultHook() {
+type ConfigOptions struct {
+	LoggingLevel string `json:"logging-level"`
+	N2IPAddress  string `json:"n2-ip"`
+	N3IPAddress  string `json:"n3-ip"`
+	N6IPAddress  string `json:"n6-ip"`
+}
+
+func (c *ConfigOptions) Validate() error {
+	if c.LoggingLevel == "" {
+		return fmt.Errorf("logging-level is required")
+	}
+
+	if c.N2IPAddress == "" {
+		return fmt.Errorf("n2-ip is required")
+	}
+
+	if c.N3IPAddress == "" {
+		return fmt.Errorf("n3-ip is required")
+	}
+
+	if c.N6IPAddress == "" {
+		return fmt.Errorf("n6-ip is required")
+	}
+
+	return nil
+}
+
+func getFQDN() (string, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+
+	addrs, err := net.LookupHost(hostname)
+	if err != nil || len(addrs) == 0 {
+		return hostname, nil
+	}
+
+	names, err := net.LookupAddr(addrs[0])
+	if err != nil || len(names) == 0 {
+		return hostname, nil
+	}
+
+	return names[0], nil
+}
+
+func Configure(k8sClient k8s.Client) error {
 	isLeader, err := goops.IsLeader()
 	if err != nil {
-		goops.LogErrorf("Could not check if unit is leader: %v", err)
-		return
+		return fmt.Errorf("could not check if unit is leader: %w", err)
 	}
 
 	if !isLeader {
-		goops.LogWarningf("Unit is not leader")
-		return
+		_ = goops.SetUnitStatus(goops.StatusBlocked, "Unit is not leader")
+		return nil
 	}
 
-	err = setPorts()
+	err = goops.SetPorts([]*goops.Port{
+		{
+			Port:     APIPort,
+			Protocol: "tcp",
+		},
+	})
 	if err != nil {
-		goops.LogErrorf("Could not set ports: %v", err)
-		return
+		return fmt.Errorf("could not set ports: %w", err)
 	}
 
 	goops.LogInfof("Ports set")
 
-	env := goops.ReadEnv()
+	configOpts := ConfigOptions{}
 
-	k8s, err := NewK8s(env.ModelName)
+	err = goops.GetConfig(&configOpts)
 	if err != nil {
-		goops.LogErrorf("Could not create k8s client: %v", err)
-		return
+		return fmt.Errorf("could not get config: %w", err)
 	}
 
-	n2IPAddress, err := goops.GetConfigString("n2-ip")
+	err = configOpts.Validate()
 	if err != nil {
-		goops.LogErrorf("Could not get n2-ip config: %v", err)
-		return
-	}
-
-	n3IPAddress, err := goops.GetConfigString("n3-ip")
-	if err != nil {
-		goops.LogErrorf("Could not get n3-ip config: %v", err)
-		return
-	}
-
-	n6IPAddress, err := goops.GetConfigString("n6-ip")
-	if err != nil {
-		goops.LogErrorf("Could not get n6-ip config: %v", err)
-		return
+		_ = goops.SetUnitStatus(goops.StatusBlocked, "Invalid config: "+err.Error())
+		return nil
 	}
 
 	appName := getAppName()
-	patchK8sResourcesOpts := &PatchK8sResourcesOptions{
-		N2IPAddress:     n2IPAddress,
-		N3IPAddress:     n3IPAddress,
-		N6IPAddress:     n6IPAddress,
+
+	env := goops.ReadEnv()
+
+	err = k8sClient.PatchResources(&k8s.PatchResourcesOptions{
+		N2IPAddress:     configOpts.N2IPAddress,
+		N3IPAddress:     configOpts.N3IPAddress,
+		N6IPAddress:     configOpts.N6IPAddress,
 		StatefulsetName: appName,
 		ContainerName:   ContainerName,
 		AppName:         appName,
 		UnitName:        env.UnitName,
 		PodName:         getPodName(),
 		N2ServiceName:   fmt.Sprintf("%s-external", appName),
-	}
-
-	err = k8s.patchK8sResources(patchK8sResourcesOpts)
+		N2Port:          N2Port,
+	})
 	if err != nil {
-		goops.LogErrorf("Could not patch k8s resources: %v", err)
-		return
+		return fmt.Errorf("could not patch k8s resources: %w", err)
 	}
 
 	goops.LogInfof("K8s resources patched")
 
-	pebble, err := pebbleClient.New(&pebbleClient.Config{Socket: socketPath})
+	pebble := goops.Pebble("core")
+
+	_, err = pebble.SysInfo()
 	if err != nil {
-		goops.LogErrorf("Could not connect to pebble: %v", err)
-		return
+		_ = goops.SetUnitStatus(goops.StatusWaiting, "Waiting for pebble to be ready")
+		return nil
 	}
 
-	expectedConfig, err := getExpectedConfig()
+	expectedConfig, err := getExpectedConfig(&configOpts)
 	if err != nil {
-		goops.LogErrorf("Could not get expected config: %v", err)
-		return
+		return fmt.Errorf("could not get expected config: %w", err)
 	}
 
 	err = pushConfigFile(pebble, expectedConfig, ConfigPath)
 	if err != nil {
-		goops.LogErrorf("Could not push config file: %v", err)
-		return
+		return fmt.Errorf("could not push config file: %w", err)
 	}
 
 	goops.LogInfof("Config file pushed")
 
 	err = addPebbleLayer(pebble)
 	if err != nil {
-		goops.LogErrorf("Could not add pebble layer: %v", err)
-		return
+		return fmt.Errorf("could not add pebble layer: %w", err)
 	}
 
 	goops.LogInfof("Pebble layer added")
 
 	err = startPebbleService(pebble)
 	if err != nil {
-		goops.LogErrorf("Could not start pebble service: %v", err)
-		return
+		return fmt.Errorf("could not start pebble service: %w", err)
 	}
 
 	goops.LogInfof("Pebble service started")
 
-	err = createAdminAccount()
+	fqdn, err := getFQDN()
 	if err != nil {
-		goops.LogErrorf("Could not create admin account: %v", err)
-		return
+		return fmt.Errorf("failed to resolve FQDN: %w", err)
 	}
 
-	goops.LogInfof("Admin account created")
-}
+	fqdn = strings.TrimSuffix(fqdn, ".")
 
-func SetStatus() {
-	status := goops.StatusActive
-
-	message := ""
-
-	err := goops.SetUnitStatus(status, message)
+	coreClient, err := coreClient.New(&coreClient.Config{
+		BaseURL: fmt.Sprintf("http://%s:%d", fqdn, APIPort),
+	})
 	if err != nil {
-		goops.LogErrorf("Could not set status: %v", err)
-		return
+		return fmt.Errorf("could not create core client: %w", err)
 	}
 
-	goops.LogInfof("Status set to %s", status)
+	status, err := coreClient.GetStatus()
+	if err != nil {
+		_ = goops.SetUnitStatus(goops.StatusWaiting, "Waiting to be able to access core API")
+
+		goops.LogDebugf("Could not get core status: %v", err)
+
+		return nil
+	}
+
+	if !status.Initialized {
+		goops.LogInfof("Core is not initialized, initializing now")
+
+		err = createAdminAccount(coreClient)
+		if err != nil {
+			return fmt.Errorf("could not create admin account: %w", err)
+		}
+
+		goops.LogInfof("Admin account created")
+	}
+
+	_ = goops.SetUnitStatus(goops.StatusActive, "Charm is ready")
+
+	return nil
 }

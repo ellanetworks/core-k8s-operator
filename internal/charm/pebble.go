@@ -5,11 +5,8 @@ import (
 	"strings"
 
 	"github.com/canonical/pebble/client"
+	"github.com/gruyaume/goops"
 	"gopkg.in/yaml.v3"
-)
-
-const (
-	socketPath = "/charm/containers/core/pebble.socket"
 )
 
 type PebbleLayer struct {
@@ -18,19 +15,14 @@ type PebbleLayer struct {
 	Services    map[string]ServiceConfig `yaml:"services"`
 }
 
-func pushConfigFile(pebbleClient *client.Client, config []byte, path string) error {
-	_, err := pebbleClient.SysInfo()
-	if err != nil {
-		return fmt.Errorf("could not connect to pebble: %w", err)
-	}
-
+func pushConfigFile(pebble goops.PebbleClient, config []byte, path string) error {
 	source := strings.NewReader(string(config))
 	pushOptions := &client.PushOptions{
 		Source: source,
 		Path:   path,
 	}
 
-	err = pebbleClient.Push(pushOptions)
+	err := pebble.Push(pushOptions)
 	if err != nil {
 		return fmt.Errorf("could not push config file: %w", err)
 	}
@@ -38,7 +30,7 @@ func pushConfigFile(pebbleClient *client.Client, config []byte, path string) err
 	return nil
 }
 
-func addPebbleLayer(pebbleClient *client.Client) error {
+func addPebbleLayer(pebble goops.PebbleClient) error {
 	layerData, err := yaml.Marshal(PebbleLayer{
 		Summary:     "Ella Core layer",
 		Description: "pebble config layer for Ella Core",
@@ -61,7 +53,7 @@ func addPebbleLayer(pebbleClient *client.Client) error {
 		LayerData: layerData,
 	}
 
-	err = pebbleClient.AddLayer(addLayerOpts)
+	err = pebble.AddLayer(addLayerOpts)
 	if err != nil {
 		return fmt.Errorf("could not add pebble layer: %w", err)
 	}
@@ -69,12 +61,12 @@ func addPebbleLayer(pebbleClient *client.Client) error {
 	return nil
 }
 
-func startPebbleService(pebbleClient *client.Client) error {
+func startPebbleService(pebble goops.PebbleClient) error {
 	serviceOpts := &client.ServiceOptions{
 		Names: []string{"core"},
 	}
 
-	_, err := pebbleClient.Start(serviceOpts)
+	_, err := pebble.Start(serviceOpts)
 	if err != nil {
 		return fmt.Errorf("could not start pebble service: %w", err)
 	}

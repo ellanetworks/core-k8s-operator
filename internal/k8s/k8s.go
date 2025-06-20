@@ -1,4 +1,4 @@
-package charm
+package k8s
 
 import (
 	"context"
@@ -58,22 +58,20 @@ type NetworkAnnotation struct {
 	Interface string `json:"interface"`
 }
 
-type PatchStatefulSetOptions struct {
-	Name               string
-	ContainerName      string
-	PodName            string
-	CapNetAdmin        bool
-	Privileged         bool
-	NetworkAnnotations []*NetworkAnnotation
-}
-
-type K8s struct {
+// RealK8s implements the K8sProvider interface using a real Kubernetes client.
+type RealK8s struct {
 	Namespace       string
 	NetAttachClient *netattachclient.Clientset
 	Client          *kubernetes.Clientset
 }
 
-func NewK8s(namespace string) (*K8s, error) {
+// K8sProvider defines the interface for Kubernetes operations.
+type Client interface {
+	PatchResources(opts *PatchResourcesOptions) error
+}
+
+// New creates a new instance of RealK8s using in-cluster configuration.
+func New(namespace string) (Client, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("error getting in-cluster config: %w", err)
@@ -89,7 +87,7 @@ func NewK8s(namespace string) (*K8s, error) {
 		return nil, fmt.Errorf("error creating Kubernetes client: %w", err)
 	}
 
-	return &K8s{
+	return RealK8s{
 		Namespace:       namespace,
 		NetAttachClient: netAttachClient,
 		Client:          client,
@@ -98,7 +96,7 @@ func NewK8s(namespace string) (*K8s, error) {
 
 // createNad creates the NetworkAttachmentDefinition in the specified namespace.
 // If the NAD already exists, it does not attempt to create it again.
-func (k *K8s) createNad(opts *CreateNADOptions) error {
+func (k RealK8s) createNad(opts *CreateNADOptions) error {
 	_, err := k.NetAttachClient.
 		K8sCniCncfIoV1().
 		NetworkAttachmentDefinitions(k.Namespace).
@@ -138,10 +136,19 @@ func (k *K8s) createNad(opts *CreateNADOptions) error {
 	return nil
 }
 
+type PatchStatefulSetOptions struct {
+	Name               string
+	ContainerName      string
+	PodName            string
+	CapNetAdmin        bool
+	Privileged         bool
+	NetworkAnnotations []*NetworkAnnotation
+}
+
 // Patch a statefulset with Multus annotation and NET_ADMIN capability
 // patchStatefulSetNetwork patches a statefulset to update the Multus network annotations
 // and to add NET_ADMIN capability to a container's security context if required.
-func (k *K8s) patchStatefulSetNetwork(opts *PatchStatefulSetOptions) error {
+func (k RealK8s) patchStatefulSetNetwork(opts *PatchStatefulSetOptions) error {
 	// Marshal the network annotations into a JSON string.
 	annotationsBytes, err := json.Marshal(opts.NetworkAnnotations)
 	if err != nil {
@@ -228,7 +235,7 @@ type PatchStatefulSetVolumeOptions struct {
 }
 
 // patchStatefulSetWithEbpfVolume retrieves the statefulset by name and patches it by adding the requested eBPF volume and volume mount only if they are not already present.
-func (k *K8s) patchStatefulSetWithEbpfVolume(opts *PatchStatefulSetVolumeOptions) error {
+func (k RealK8s) patchStatefulSetWithEbpfVolume(opts *PatchStatefulSetVolumeOptions) error {
 	statefulset, err := k.Client.AppsV1().StatefulSets(k.Namespace).Get(context.TODO(), opts.Name, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -294,7 +301,7 @@ func (k *K8s) patchStatefulSetWithEbpfVolume(opts *PatchStatefulSetVolumeOptions
 	return nil
 }
 
-type PatchK8sResourcesOptions struct {
+type PatchResourcesOptions struct {
 	N2IPAddress     string
 	N3IPAddress     string
 	N6IPAddress     string
@@ -304,9 +311,10 @@ type PatchK8sResourcesOptions struct {
 	UnitName        string
 	PodName         string
 	N2ServiceName   string
+	N2Port          int32
 }
 
-func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
+func (k RealK8s) PatchResources(opts *PatchResourcesOptions) error {
 	createN2NADOpts := &CreateNADOptions{
 		Name: N2NetworkAttachmentDefinitionName,
 		NAD: &NetworkAttachmentDefinition{
@@ -384,7 +392,7 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 
 	patchStatefulSetOpts := &PatchStatefulSetOptions{
 		Name:          opts.StatefulsetName,
-		ContainerName: ContainerName,
+		ContainerName: opts.ContainerName,
 		PodName:       opts.PodName,
 		CapNetAdmin:   true,
 		Privileged:    true,
@@ -411,7 +419,7 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 
 	patchStatefulsetVolOpts := &PatchStatefulSetVolumeOptions{
 		Name:          opts.StatefulsetName,
-		ContainerName: ContainerName,
+		ContainerName: opts.ContainerName,
 		PodName:       opts.PodName,
 		RequestedVolume: v1.Volume{
 			Name: "ebpf",
@@ -435,6 +443,7 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 	createN2ServiceOpts := &CreateN2ServiceOptions{
 		Name:    opts.N2ServiceName,
 		AppName: opts.AppName,
+		N2Port:  opts.N2Port,
 	}
 
 	err = k.createN2Service(createN2ServiceOpts)
@@ -448,9 +457,10 @@ func (k *K8s) patchK8sResources(opts *PatchK8sResourcesOptions) error {
 type CreateN2ServiceOptions struct {
 	Name    string
 	AppName string
+	N2Port  int32
 }
 
-func (k *K8s) createN2Service(opts *CreateN2ServiceOptions) error {
+func (k RealK8s) createN2Service(opts *CreateN2ServiceOptions) error {
 	_, err := k.Client.CoreV1().Services(k.Namespace).Get(context.TODO(), opts.Name, metav1.GetOptions{})
 	if err == nil {
 		return nil
@@ -472,7 +482,7 @@ func (k *K8s) createN2Service(opts *CreateN2ServiceOptions) error {
 			Ports: []v1.ServicePort{
 				{
 					Name:     "ngapp",
-					Port:     N2Port,
+					Port:     opts.N2Port,
 					Protocol: "SCTP",
 				},
 			},

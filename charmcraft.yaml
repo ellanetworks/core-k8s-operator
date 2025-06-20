@@ -48,7 +48,7 @@ resources:
   core-image:
     type: oci-image
     description: OCI image for Ella Core
-    upstream-source: ghcr.io/ellanetworks/ella-core:v0.0.15
+    upstream-source: ghcr.io/ellanetworks/ella-core:v0.0.18
 
 storage:
   config:
