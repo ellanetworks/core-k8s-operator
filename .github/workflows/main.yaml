@@ -22,26 +22,26 @@ jobs:
   go-test:
     uses: ./.github/workflows/go-unittest.yaml
 
-  build:
-    # needs:
-    #   - go-lint
-    #   - go-vet
-    #   - go-test
-    uses: ./.github/workflows/build.yaml
-    secrets: inherit
+  # build:
+  #   # needs:
+  #   #   - go-lint
+  #   #   - go-vet
+  #   #   - go-test
+  #   uses: ./.github/workflows/build.yaml
+  #   secrets: inherit
 
   integration-test:
-    needs:
-      - build
+    # needs:
+    #   - build
     uses: ./.github/workflows/integration-test.yaml
     secrets: inherit
 
-  publish-charm:
-    needs:
-      - go-lint
-      - go-vet
-      - go-test
-      - build
-    if: ${{ github.ref_name == 'main' }}
-    uses: ./.github/workflows/publish-charm.yaml
-    secrets: inherit
+  # publish-charm:
+  #   needs:
+  #     - go-lint
+  #     - go-vet
+  #     - go-test
+  #     - build
+  #   if: ${{ github.ref_name == 'main' }}
+  #   uses: ./.github/workflows/publish-charm.yaml
+  #   secrets: inherit
