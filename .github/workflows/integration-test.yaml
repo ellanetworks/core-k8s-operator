@@ -23,22 +23,32 @@ jobs:
         id: charm-path
         run: echo "charm_path=$(find built/ -name '*.charm' -type f -print)" >> $GITHUB_OUTPUT
 
+      - name: Setup Canonical K8S
+        id: canonical-k8s
+        run: |
+          sudo snap install k8s --classic --channel=1.32-classic/stable
+          cat << EOF | sudo k8s bootstrap --file -
+          containerd-base-dir: /opt/containerd
+          EOF
+          sudo k8s enable network dns load-balancer local-storage
+          sudo k8s set load-balancer.cidrs="10.0.0.2-10.0.0.10"
+          sudo k8s status --wait-ready --timeout 5m
+          mkdir -p ~/.kube
+          sudo k8s config > ~/.kube/config
+          echo "kubeconfig=$(sudo k8s config | base64 -w 0)" >> $GITHUB_OUTPUT
+
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
           juju-channel: 3.6/stable
-          provider: microk8s
-          channel: 1.32/stable
-          lxd-channel: 5.21/stable
-          microk8s-addons: "hostpath-storage dns"
+          provider: k8s
 
       - name: Enable Multus addon
         continue-on-error: true
         run: |
-          sudo microk8s addons repo add community https://github.com/canonical/microk8s-community-addons --reference feat/strict-fix-multus
-          sudo microk8s enable multus
-          sudo microk8s kubectl -n kube-system rollout status daemonset/kube-multus-ds
-          sudo microk8s kubectl auth can-i create network-attachment-definitions
+          sudo k8s kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
+          sudo k8s kubectl -n kube-system rollout status daemonset/kube-multus-ds
+          sudo k8s kubectl auth can-i create network-attachment-definitions
 
       - name: Run integration tests
         run: |
