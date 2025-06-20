@@ -40,6 +40,7 @@ jobs:
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
+          credentials-yaml: ${{ steps.canonical-k8s.outputs.kubeconfig }}
           juju-channel: 3.6/stable
           provider: k8s
 
