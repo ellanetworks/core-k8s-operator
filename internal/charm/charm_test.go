@@ -31,7 +31,7 @@ func TestGivenNotLeaderWhenConfigureThenStatusBlocked(t *testing.T) {
 		Charm: ConfigureWithFakeK8s,
 	}
 
-	stateIn := &goopstest.State{
+	stateIn := goopstest.State{
 		Leader: false,
 	}
 
@@ -44,8 +44,12 @@ func TestGivenNotLeaderWhenConfigureThenStatusBlocked(t *testing.T) {
 		t.Fatalf("unexpected charm error: %v", ctx.CharmErr)
 	}
 
-	if stateOut.UnitStatus != "blocked" {
-		t.Errorf("expected status 'blocked', got '%s'", stateOut.UnitStatus)
+	expectedStatus := goopstest.Status{
+		Name:    goopstest.StatusBlocked,
+		Message: "Unit is not leader",
+	}
+	if stateOut.UnitStatus != expectedStatus {
+		t.Errorf("expected status %v, got %v", expectedStatus, stateOut.UnitStatus)
 	}
 }
 
@@ -54,7 +58,7 @@ func TestGivenLeaderWhenConfigureThenPortsSet(t *testing.T) {
 		Charm: ConfigureWithFakeK8s,
 	}
 
-	stateIn := &goopstest.State{
+	stateIn := goopstest.State{
 		Leader: true,
 	}
 
@@ -67,12 +71,12 @@ func TestGivenLeaderWhenConfigureThenPortsSet(t *testing.T) {
 		t.Fatalf("unexpected charm error: %v", ctx.CharmErr)
 	}
 
-	expectedPorts := &goopstest.Port{
+	expectedPorts := goopstest.Port{
 		Port:     2111,
 		Protocol: "tcp",
 	}
-	if !reflect.DeepEqual(stateOut.Ports, []*goopstest.Port{expectedPorts}) {
-		t.Errorf("expected ports %v, got %v", []goopstest.Port{*expectedPorts}, stateOut.Ports)
+	if !reflect.DeepEqual(stateOut.Ports, []goopstest.Port{expectedPorts}) {
+		t.Errorf("expected ports %v, got %v", []goopstest.Port{expectedPorts}, stateOut.Ports)
 	}
 }
 
@@ -81,9 +85,9 @@ func TestGivenInvalidConfigWhenConfigureThenStatusBlocked(t *testing.T) {
 		Charm: ConfigureWithFakeK8s,
 	}
 
-	stateIn := &goopstest.State{
+	stateIn := goopstest.State{
 		Leader: true,
-		Config: map[string]string{
+		Config: map[string]any{
 			"logging-level": "",
 			"n2-ip":         "2.2.2.2",
 			"n3-ip":         "3.3.3.3",
@@ -100,8 +104,12 @@ func TestGivenInvalidConfigWhenConfigureThenStatusBlocked(t *testing.T) {
 		t.Fatalf("unexpected charm error: %v", ctx.CharmErr)
 	}
 
-	if stateOut.UnitStatus != "blocked" {
-		t.Errorf("expected status 'blocked', got '%s'", stateOut.UnitStatus)
+	expectedStatus := goopstest.Status{
+		Name:    goopstest.StatusBlocked,
+		Message: "Invalid config: logging-level is required",
+	}
+	if stateOut.UnitStatus != expectedStatus {
+		t.Errorf("expected status %v, got %v", expectedStatus, stateOut.UnitStatus)
 	}
 }
 
@@ -110,15 +118,15 @@ func TestGivenCantConnectToPebbleWhenConfigureThenStatusIsWaiting(t *testing.T) 
 		Charm: ConfigureWithFakeK8s,
 	}
 
-	stateIn := &goopstest.State{
+	stateIn := goopstest.State{
 		Leader: true,
-		Config: map[string]string{
+		Config: map[string]any{
 			"logging-level": "debug",
 			"n2-ip":         "2.2.2.2",
 			"n3-ip":         "3.3.3.3",
 			"n6-ip":         "6.6.6.6",
 		},
-		Containers: []*goopstest.Container{
+		Containers: []goopstest.Container{
 			{
 				Name: "core",
 			},
@@ -134,7 +142,11 @@ func TestGivenCantConnectToPebbleWhenConfigureThenStatusIsWaiting(t *testing.T) 
 		t.Fatalf("unexpected charm error: %v", ctx.CharmErr)
 	}
 
-	if stateOut.UnitStatus != "waiting" {
-		t.Errorf("expected status 'waiting', got '%s'", stateOut.UnitStatus)
+	expectedStatus := goopstest.Status{
+		Name:    goopstest.StatusWaiting,
+		Message: "Waiting for pebble to be ready",
+	}
+	if stateOut.UnitStatus != expectedStatus {
+		t.Errorf("expected status %v, got %v", expectedStatus, stateOut.UnitStatus)
 	}
 }
