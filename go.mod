@@ -7,7 +7,7 @@ require (
 	github.com/ellanetworks/core v0.0.18
 	github.com/gruyaume/go-juju v0.0.0-20250619213935-19fa0cba6482
 	github.com/gruyaume/goops v0.0.23
-	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.6
+	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.33.2
 	k8s.io/apimachinery v0.33.2
