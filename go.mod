@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/canonical/pebble v1.22.2
-	github.com/ellanetworks/core v0.0.19
+	github.com/ellanetworks/core v0.0.20
 	github.com/gruyaume/go-juju v0.0.0-20250619213935-19fa0cba6482
 	github.com/gruyaume/goops v0.0.23
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7

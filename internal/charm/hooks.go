@@ -79,7 +79,7 @@ func createAdminAccount(core *coreClient.Client) error {
 	err = core.CreateUser(&coreClient.CreateUserOptions{
 		Email:    CharmUserEmail,
 		Password: password,
-		Role:     "admin",
+		RoleID:   coreClient.RoleAdmin,
 	})
 	if err != nil {
 		return fmt.Errorf("could not create user: %w", err)
