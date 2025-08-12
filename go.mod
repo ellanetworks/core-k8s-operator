@@ -4,7 +4,7 @@ go 1.24.4
 
 require (
 	github.com/canonical/pebble v1.23.0
-	github.com/ellanetworks/core v0.0.20
+	github.com/ellanetworks/core v0.1.0
 	github.com/gruyaume/go-juju v0.0.0-20250619213935-19fa0cba6482
 	github.com/gruyaume/goops v0.0.23
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
@@ -36,11 +36,11 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/net v0.42.0 // indirect
+	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
-	golang.org/x/sys v0.34.0 // indirect
-	golang.org/x/term v0.33.0 // indirect
-	golang.org/x/text v0.27.0 // indirect
+	golang.org/x/sys v0.35.0 // indirect
+	golang.org/x/term v0.34.0 // indirect
+	golang.org/x/text v0.28.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
