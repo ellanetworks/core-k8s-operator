@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/ellanetworks/core-k8s/internal/charm"
@@ -17,7 +18,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = charm.Configure(k8sClient)
+	ctx := context.Background()
+
+	err = charm.Configure(ctx, k8sClient)
 	if err != nil {
 		goops.LogErrorf("could not configure charm: %v", err)
 		os.Exit(1)

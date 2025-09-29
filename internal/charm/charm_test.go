@@ -1,6 +1,7 @@
 package charm_test
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -18,7 +19,9 @@ func (f FakeK8s) PatchResources(*k8s.PatchResourcesOptions) error {
 func ConfigureWithFakeK8s() error {
 	fakeK8s := &FakeK8s{}
 
-	err := charm.Configure(fakeK8s)
+	ctx := context.Background()
+
+	err := charm.Configure(ctx, fakeK8s)
 	if err != nil {
 		return err
 	}
