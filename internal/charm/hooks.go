@@ -1,6 +1,7 @@
 package charm
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"net"
@@ -59,7 +60,7 @@ func generateRandomPassword() (string, error) {
 	return string(b), nil
 }
 
-func createAdminAccount(core *coreClient.Client) error {
+func createAdminAccount(ctx context.Context, core *coreClient.Client) error {
 	password, err := generateRandomPassword()
 	if err != nil {
 		return fmt.Errorf("could not generate random password: %w", err)
@@ -76,7 +77,7 @@ func createAdminAccount(core *coreClient.Client) error {
 		return fmt.Errorf("could not add secret: %w", err)
 	}
 
-	err = core.CreateUser(&coreClient.CreateUserOptions{
+	err = core.CreateUser(ctx, &coreClient.CreateUserOptions{
 		Email:    CharmUserEmail,
 		Password: password,
 		RoleID:   coreClient.RoleAdmin,
@@ -134,7 +135,7 @@ func getFQDN() (string, error) {
 	return names[0], nil
 }
 
-func Configure(k8sClient k8s.Client) error {
+func Configure(ctx context.Context, k8sClient k8s.Client) error {
 	isLeader, err := goops.IsLeader()
 	if err != nil {
 		return fmt.Errorf("could not check if unit is leader: %w", err)
@@ -240,7 +241,7 @@ func Configure(k8sClient k8s.Client) error {
 		return fmt.Errorf("could not create core client: %w", err)
 	}
 
-	status, err := coreClient.GetStatus()
+	status, err := coreClient.GetStatus(ctx)
 	if err != nil {
 		_ = goops.SetUnitStatus(goops.StatusWaiting, "Waiting to be able to access core API")
 
@@ -252,7 +253,7 @@ func Configure(k8sClient k8s.Client) error {
 	if !status.Initialized {
 		goops.LogInfof("Core is not initialized, initializing now")
 
-		err = createAdminAccount(coreClient)
+		err = createAdminAccount(ctx, coreClient)
 		if err != nil {
 			return fmt.Errorf("could not create admin account: %w", err)
 		}
