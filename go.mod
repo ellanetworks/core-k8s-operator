@@ -4,14 +4,14 @@ go 1.24.6
 
 require (
 	github.com/canonical/pebble v1.25.0
-	github.com/ellanetworks/core v0.4.1
+	github.com/ellanetworks/core v0.4.2
 	github.com/gruyaume/go-juju v0.0.0-20250924131529-6d535d5eae2a
 	github.com/gruyaume/goops v0.0.23
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.34.1
-	k8s.io/apimachinery v0.34.1
-	k8s.io/client-go v0.34.1
+	k8s.io/api v0.34.2
+	k8s.io/apimachinery v0.34.2
+	k8s.io/client-go v0.34.2
 )
 
 require (
@@ -47,7 +47,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/net v0.46.0 // indirect
 	golang.org/x/oauth2 v0.31.0 // indirect
-	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/term v0.36.0 // indirect
 	golang.org/x/text v0.30.0 // indirect
 	golang.org/x/time v0.13.0 // indirect
