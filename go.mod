@@ -3,7 +3,7 @@ module github.com/ellanetworks/core-k8s
 go 1.24.6
 
 require (
-	github.com/canonical/pebble v1.25.0
+	github.com/canonical/pebble v1.26.0
 	github.com/ellanetworks/core v0.5.0
 	github.com/gruyaume/go-juju v0.0.0-20250924131529-6d535d5eae2a
 	github.com/gruyaume/goops v0.0.23
